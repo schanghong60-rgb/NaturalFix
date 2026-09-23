@@ -1,5 +1,5 @@
-const CACHE = 'naturalfix-v1.1.1';
-const CORE = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'naturalfix-v1.1.2-auth';
+const CORE = ['./styles.css', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 const SHELL_URL = new URL('./index.html', self.registration.scope).href;
 
 self.addEventListener('install', (event) => {
@@ -29,20 +29,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(SHELL_URL, copy));
-          }
-          return response;
-        })
-        .catch(() => caches.match(SHELL_URL))
-    );
-    return;
-  }
+  if (request.mode === 'navigate') return;
+    
+      
+      
+        
+            
+            
+          
+          
+        
+        
+    
+  
+  
 
   if (url.origin === self.location.origin) {
     event.respondWith(
