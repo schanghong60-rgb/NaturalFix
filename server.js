@@ -88,15 +88,20 @@ function safeName(value, fallback = 'item') {
 }
 
 function explicitRequest(text = '') {
-  const t = String(text).toLowerCase();
-  const patterns = [
-    /nudify|deepnude|remove\s+(her|his|their|the)\s+clothes|remove\s+clothing|strip\s+naked/,
-    /genitals?|vagina|penis|testicles?|explicit\s+sex|sexual\s+penetration|pornographic|rape/,
-    /服を脱が|脱衣させ|裸にして|全裸にして|性器|挿入|性交|強姦|レイプ/,
-    /(minor|underage|child|teen)\s+.*(sexual|nude|naked|erotic)/,
-    /(未成年|子ども|児童|中学生|高校生).*(性的|裸|ヌード|エロ)/
-  ];
-  return patterns.some((p) => p.test(t));
+  const t = String(text || '').toLowerCase();
+
+  // 未成年を示す表現
+  const minor =
+    /\b(minor|underage|child|kid)\b/.test(t) ||
+    /(未成年|子ども|子供|児童|小学生|中学生|高校生)/.test(t);
+
+  // 性的な内容を示す表現
+  const sexual =
+    /\b(sex|sexual|nude|naked|porn|pornographic|erotic)\b/.test(t) ||
+    /(性的|性行為|裸|全裸|ヌード|ポルノ|エロ)/.test(t);
+
+  // 「未成年」＋「性的内容」の両方がある場合だけ弾く
+  return minor && sexual;
 }
 
 function fetchTimeout(url, options = {}, timeoutMs = 15_000) {
