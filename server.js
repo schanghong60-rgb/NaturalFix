@@ -34,6 +34,141 @@ await fsp.mkdir(path.join(ROOT, 'datasets'), { recursive: true });
 await fsp.mkdir(path.join(ROOT, 'lora_output'), { recursive: true });
 
 app.disable('x-powered-by');
+const APP_USER = process.env.APP_USER || '';
+const APP_PASSWORD = process.env.APP_PASSWORD || '';
+const SESSION_SECRET = process.env.SESSION_SECRET || '';
+
+const SESSION_COOKIE = 'naturalfix_session';
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+
+function safeEqual(a, b) {
+  const ah = crypto.createHash('sha256').update(String(a)).digest();
+  const bh = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(ah, bh);
+}
+
+function signSession(value) {
+  return crypto
+    .createHmac('sha256', SESSION_SECRET)
+    .update(value)
+    .digest('hex');
+}
+
+function makeSessionToken() {
+  const issuedAt = Date.now();
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const value = `${issuedAt}.${nonce}`;
+  return `${value}.${signSession(value)}`;
+}
+
+function validSessionToken(token = '') {
+  if (!SESSION_SECRET) return false;
+
+  const [issuedAtText, nonce, signature] = String(token).split('.');
+  if (!issuedAtText || !nonce || !signature) return false;
+
+  const issuedAt = Number(issuedAtText);
+  if (!Number.isFinite(issuedAt)) return false;
+  if (Date.now() - issuedAt > SESSION_TTL_MS) return false;
+
+  return safeEqual(signature, signSession(`${issuedAtText}.${nonce}`));
+}
+
+function readCookies(req) {
+  const cookies = {};
+  for (const part of String(req.headers.cookie || '').split(';')) {
+    const index = part.indexOf('=');
+    if (index < 0) continue;
+    cookies[part.slice(0, index).trim()] =
+      decodeURIComponent(part.slice(index + 1).trim());
+  }
+  return cookies;
+}
+
+app.use(express.urlencoded({ extended: false, limit: '8kb' }));
+
+if (!APP_USER || !APP_PASSWORD || !SESSION_SECRET) {
+  throw new Error('APP_USER, APP_PASSWORD, SESSION_SECRET must be set');
+}
+
+const LOGIN_HTML = `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NaturalFix Login</title>
+</head>
+<body>
+  <main style="max-width:360px;margin:15vh auto;padding:24px;font-family:sans-serif">
+    <h1>🔐 NaturalFix</h1>
+    <form method="post" action="/login">
+      <p><input name="username" autocomplete="username" required
+        placeholder="ユーザー名" style="width:100%;padding:12px;box-sizing:border-box"></p>
+      <p><input type="password" name="password" autocomplete="current-password" required
+        placeholder="パスワード" style="width:100%;padding:12px;box-sizing:border-box"></p>
+      <button type="submit" style="width:100%;padding:12px">ログイン</button>
+    </form>
+  </main>
+</body>
+</html>`;
+
+app.get('/login', (req, res) => {
+  const token = readCookies(req)[SESSION_COOKIE];
+  if (validSessionToken(token)) return res.redirect('/');
+  res.setHeader('Cache-Control', 'no-store');
+  res.type('html').send(LOGIN_HTML);
+});
+
+app.post('/login', (req, res) => {
+  const userOk = safeEqual(req.body?.username || '', APP_USER);
+  const passOk = safeEqual(req.body?.password || '', APP_PASSWORD);
+
+  if (!userOk || !passOk) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(401).type('html').send(LOGIN_HTML);
+  }
+
+  res.cookie(SESSION_COOKIE, makeSessionToken(), {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    maxAge: SESSION_TTL_MS,
+    path: '/'
+  });
+
+  res.redirect('/');
+});
+
+app.post('/logout', (req, res) => {
+  res.clearCookie(SESSION_COOKIE, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    path: '/'
+  });
+  res.redirect('/login');
+});
+
+app.use((req, res, next) => {
+  const token = readCookies(req)[SESSION_COOKIE];
+  if (validSessionToken(token)) return next();
+
+  res.setHeader('Cache-Control', 'no-store');
+
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ error: 'ログインが必要です' });
+  }
+
+  return res.redirect('/login');
+});
+
+
+
+
+
+
+
+
 
 // Optional CORS for a static GitHub Pages frontend talking to this backend.
 // Leave ALLOWED_ORIGINS empty for same-origin use.
