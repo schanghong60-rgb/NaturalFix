@@ -139,10 +139,10 @@ function cleanJsonText(text) {
     .trim();
 }
 
-
-  
-    
-  
+async function makeDolphinPlan({ prompt, references = [], mode = 'realistic', pose = '', performance = 'fast' }) {
+  if (explicitRequest(prompt)) {
+    throw new Error('露骨な性的変換・脱衣/裸化の指示には対応していません');
+  }
 
   const refText = references.map((r, i) =>
     `Reference ${i + 1}: role=${String(r.role || 'style')}, strength=${clamp(r.strength, 0, 100)}/100`
@@ -405,7 +405,7 @@ app.post('/api/generate', async (req, res) => {
     const prompt = String(body.prompt || '').trim();
     const references = Array.isArray(body.references) ? body.references.slice(0, 3) : [];
     if (!prompt) return res.status(400).json({ error: '編集指示を入力してください' });
-    
+    if (explicitRequest(prompt)) return res.status(400).json({ error: '露骨な性的変換・脱衣/裸化には対応していません' });
 
     const payload = {
       ...body,
