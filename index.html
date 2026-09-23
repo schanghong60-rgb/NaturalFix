@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111318">
+  <meta name="description" content="NaturalFix AI - local image adjustment, Krea 2 / Dolphin / LoRA workflow controller">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+  <title>NaturalFix AI</title>
+</head>
+<body>
+<header>NaturalFix AI ✨</header>
+<div class="container">
+  <section class="card">
+    <h3>📱 アプリ状態</h3>
+    <div id="health" class="health"><span class="badge">確認中…</span></div>
+    <button id="installButton" class="install">📲 ホーム画面に追加</button>
+    <div id="installHint" class="note"></div>
+  </section>
+
+  <section class="card">
+    <h3>📷 スマホから画像を読み込む</h3>
+    <input id="fileInput" type="file" accept="image/*">
+    <div id="modelStatus" class="status">顔解析AIを準備中…</div>
+  </section>
+
+  <div class="canvas-wrap"><canvas id="canvas"></canvas></div>
+
+  <section class="card">
+    <h3>✨ NaturalFix補正</h3>
+    <div class="control"><label><span>自然化</span><span id="naturalValue">0</span></label><input id="natural" type="range" min="0" max="100" value="0"></div>
+    <div class="control"><label><span>明るさ</span><span id="brightnessValue">100</span></label><input id="brightness" type="range" min="50" max="150" value="100"></div>
+    <div class="control"><label><span>コントラスト</span><span id="contrastValue">100</span></label><input id="contrast" type="range" min="50" max="150" value="100"></div>
+    <div class="control"><label><span>彩度</span><span id="saturationValue">100</span></label><input id="saturation" type="range" min="0" max="160" value="100"></div>
+    <div class="control"><label><span>シャープ</span><span id="sharpValue">0</span></label><input id="sharp" type="range" min="0" max="50" value="0"></div>
+    <div class="control"><label><span>回転</span><span id="rotateValue">0°</span></label><input id="rotate" type="range" min="-20" max="20" step="0.1" value="0"></div>
+    <div class="checks">
+      <label class="check"><input id="fastPreview" type="checkbox" checked>高速プレビュー</label>
+      <label class="check"><input id="showGuide" type="checkbox" checked>顔ガイド</label>
+      <label class="check"><input id="showDistortion" type="checkbox" checked>輪郭ガイド</label>
+      <label class="check"><input id="autoFaceTilt" type="checkbox">傾き自動補正</label>
+    </div>
+    <div class="buttons three">
+      <button class="primary" id="analyzeButton">🤖 顔解析</button>
+      <button class="primary" id="autoFixButton">✨ 自動補正</button>
+      <button id="flipButton">↔ 左右反転</button>
+      <button id="rotate90Button">🔄 90°</button>
+      <button id="resetButton">↩ リセット</button>
+      <button class="green" id="downloadButton">💾 JPG保存</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h3>🧠 顔・輪郭解析</h3>
+    <div class="results">
+      <div class="result"><strong>顔の傾き</strong><span id="tiltResult">未解析</span></div>
+      <div class="result"><strong>左右バランス</strong><span id="symmetryResult">未解析</span></div>
+      <div class="result"><strong>目の高さ差</strong><span id="eyeResult">未解析</span></div>
+      <div class="result"><strong>輪郭ゆがみ候補</strong><span id="distortionResult">未解析</span></div>
+      <div class="result"><strong>ゆがみ指数</strong><span id="distortionScore">--</span></div>
+      <div class="result"><strong>補正候補</strong><span id="suggestResult">未解析</span></div>
+    </div>
+    <p class="note">輪郭指数は正面度・表情・撮影角度でも変わる簡易指標。画像加工の有無を断定するものではないよ。</p>
+  </section>
+
+  <section class="card" id="videoPartStudio">
+    <h3>🎬 動画用キャラクターパーツ・スタジオ</h3>
+    <p class="note">読み込んだキャラクターを顔・手・腕・胴体・脚などに細かく解析して、見えている部分はローカル抽出、必要な部分はAIで同じキャラクターの動画用リファレンス素材として生成できるよ。</p>
+    <div class="checks">
+      <label class="check"><input id="showPoseGuide" type="checkbox">全身骨格ガイド</label>
+      <label class="check"><input id="showHandGuide" type="checkbox">手ガイド</label>
+    </div>
+    <div class="buttons three">
+      <button id="analyzePartsButton" class="primary">🧩 顔・体・手を解析</button>
+      <button id="extractAllPartsButton">🖼 見えるパーツを抽出</button>
+      <button id="clearPartsButton">♻️ パーツ表示をクリア</button>
+    </div>
+    <div id="characterPartStatus" class="status">画像を読み込んでから解析してね</div>
+
+    <div class="grid2" style="margin-top:12px">
+      <div>
+        <label class="row-label"><span>生成 / 抽出するパーツ</span></label>
+        <select id="characterPartSelect">
+          <optgroup label="顔">
+            <option value="head">頭部・髪</option>
+            <option value="face" selected>顔全体</option>
+            <option value="left_eye">左目</option>
+            <option value="right_eye">右目</option>
+            <option value="left_eyebrow">左眉</option>
+            <option value="right_eyebrow">右眉</option>
+            <option value="nose">鼻</option>
+            <option value="mouth">口・唇</option>
+            <option value="left_ear">左耳</option>
+            <option value="right_ear">右耳</option>
+          </optgroup>
+          <optgroup label="上半身">
+            <option value="upper_body">上半身全体</option>
+            <option value="shoulders">両肩</option>
+            <option value="torso">胴体</option>
+            <option value="left_upper_arm">左上腕</option>
+            <option value="right_upper_arm">右上腕</option>
+            <option value="left_forearm">左前腕</option>
+            <option value="right_forearm">右前腕</option>
+            <option value="left_hand">左手・指</option>
+            <option value="right_hand">右手・指</option>
+          </optgroup>
+          <optgroup label="下半身">
+            <option value="hips">腰・ヒップライン（衣服込み）</option>
+            <option value="left_thigh">左太もも（衣服込み）</option>
+            <option value="right_thigh">右太もも（衣服込み）</option>
+            <option value="left_calf">左すね・ふくらはぎ</option>
+            <option value="right_calf">右すね・ふくらはぎ</option>
+            <option value="left_foot">左足</option>
+            <option value="right_foot">右足</option>
+            <option value="full_body">全身</option>
+          </optgroup>
+        </select>
+      </div>
+      <div>
+        <label class="row-label"><span>動画素材タイプ</span></label>
+        <select id="characterPartAssetType">
+          <option value="detail" selected>高精細パーツ資料</option>
+          <option value="front">正面リファレンス</option>
+          <option value="side">横向きリファレンス</option>
+          <option value="turnaround">ターンアラウンド資料</option>
+          <option value="motion">動作しやすい自然姿勢</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="control">
+      <label><span>キャラクター維持強度</span><span id="characterKeepValue">85</span></label>
+      <input id="characterKeep" type="range" min="30" max="100" value="85">
+    </div>
+    <div class="control">
+      <label><span>追加指示</span></label>
+      <textarea id="characterPartPrompt" rows="3" placeholder="例：手の指を自然に、同じ衣装・同じ髪色・同じ顔立ちを維持。動画で形が崩れにくい資料にする"></textarea>
+    </div>
+    <div class="buttons three">
+      <button id="previewPartButton">🔎 選択パーツを抽出</button>
+      <button id="downloadPartButton" class="green">💾 抽出PNG保存</button>
+      <button id="generatePartButton" class="primary">✨ 選択パーツをAI生成</button>
+    </div>
+    <div id="selectedPartPreview" class="part-selected-preview"></div>
+    <div id="partGrid" class="part-grid"></div>
+    <div id="partGenerationStatus" class="status"></div>
+    <div id="partGeneratedArea" class="generated"></div>
+    <div class="warning">動画用パーツ生成は、読み込んだキャラクターの見た目・衣装・色・形を維持するための資料作成用。脱衣・裸化・露骨な性的パーツ生成はしない仕様だよ。</div>
+  </section>
+
+  <section class="card">
+    <h3>🧬 最大3枚 マルチリファレンス編集</h3>
+    <div class="mode-buttons">
+      <button id="realisticButton" class="mode-button active">📷 リアル</button>
+      <button id="animeButton" class="mode-button">🎨 アニメ</button>
+    </div>
+    <div class="ref-grid">
+      <div class="ref-slot" data-ref="1"><strong>参考画像 1</strong><input id="refInput1" type="file" accept="image/*"><img id="refPreview1" class="ref-preview"><select id="refRole1"><option value="face">顔の雰囲気</option><option value="hair">髪型</option><option value="outfit">衣装</option><option value="background">背景</option><option value="color">色味</option><option value="pose">ポーズ</option><option value="adult_mood">🔞 大人向けムード（非露骨）</option></select><div class="control"><label><span>反映度</span><span id="refStrengthValue1">60</span></label><input id="refStrength1" type="range" min="0" max="100" value="60"></div></div>
+      <div class="ref-slot" data-ref="2"><strong>参考画像 2</strong><input id="refInput2" type="file" accept="image/*"><img id="refPreview2" class="ref-preview"><select id="refRole2"><option value="face">顔の雰囲気</option><option value="hair" selected>髪型</option><option value="outfit">衣装</option><option value="background">背景</option><option value="color">色味</option><option value="pose">ポーズ</option><option value="adult_mood">🔞 大人向けムード（非露骨）</option></select><div class="control"><label><span>反映度</span><span id="refStrengthValue2">50</span></label><input id="refStrength2" type="range" min="0" max="100" value="50"></div></div>
+      <div class="ref-slot" data-ref="3"><strong>参考画像 3</strong><input id="refInput3" type="file" accept="image/*"><img id="refPreview3" class="ref-preview"><select id="refRole3"><option value="face">顔の雰囲気</option><option value="hair">髪型</option><option value="outfit">衣装</option><option value="background" selected>背景</option><option value="color">色味</option><option value="pose">ポーズ</option><option value="adult_mood">🔞 大人向けムード（非露骨）</option></select><div class="control"><label><span>反映度</span><span id="refStrengthValue3">40</span></label><input id="refStrength3" type="range" min="0" max="100" value="40"></div></div>
+    </div>
+    <div class="control"><label><span>ポーズ / カメラ</span></label><select id="posePreset"><option value="">指定なし</option><option value="standing front, relaxed natural posture">立ち・正面</option><option value="standing three-quarter view, natural weight shift">立ち・斜め</option><option value="looking back over shoulder">振り返り</option><option value="sitting naturally on a chair">椅子に座る</option><option value="sitting casually on a sofa">ソファに座る</option><option value="walking naturally, candid moment">歩く</option><option value="hands on hips, confident posture">手を腰に</option><option value="one hand touching hair, relaxed pose">髪に手を添える</option><option value="upper-body portrait, eye-level camera">上半身ポートレート</option><option value="full-body portrait, eye-level camera">全身ポートレート</option><option value="low-angle portrait, subtle perspective">ローアングル</option><option value="high-angle portrait, subtle perspective">ハイアングル</option></select></div>
+    <div class="control"><label><span>編集指示</span></label><textarea id="multiRefPrompt" rows="4" placeholder="例：ベース画像を中心に、参考1の顔の雰囲気、参考2の髪型、参考3の色味を自然に融合"></textarea></div>
+    <div class="warning">🔞「大人向けムード」は、成人向けのファッション・照明・表情・雰囲気だけ。脱衣、裸化、性器追加、露骨な性行為化はしない仕様だよ。</div>
+  </section>
+
+  <section class="card">
+    <h3>⚡ Krea 2 / Dolphin / LoRA</h3>
+    <div class="grid2">
+      <div><label class="row-label"><span>処理モード</span></label><select id="performanceMode"><option value="fast" selected>⚡ 高速：Turbo 8-step</option><option value="balanced">⚖️ バランス：Turbo</option><option value="quality">✨ 高品質：2パスWorkflow</option></select></div>
+      <div><label class="row-label"><span>Seed</span></label><input id="seed" type="number" value="42"></div>
+    </div>
+    <div class="checks"><label class="check"><input id="useDolphin" type="checkbox" checked>🐬 Dolphin 3.0で指示最適化</label><label class="check"><input id="twoSamplerEnabled" type="checkbox">🔥 2パスサンプラーWorkflow</label></div>
+    <div id="samplerPanel" class="grid2">
+      <div><label class="row-label"><span>Pass1 sampler</span></label><select id="samplerPass1"><option value="euler" selected>Euler</option><option value="dpmpp_2m_sde">DPM++ 2M SDE</option></select></div>
+      <div><label class="row-label"><span>Pass2 sampler</span></label><select id="samplerPass2"><option value="euler">Euler</option><option value="dpmpp_2m_sde" selected>DPM++ 2M SDE</option></select></div>
+      <div class="control"><label><span>総Steps</span><span id="samplerStepsValue">8</span></label><input id="samplerSteps" type="range" min="4" max="60" value="8"></div>
+      <div class="control"><label><span>切替Step</span><span id="samplerBoundaryValue">3</span></label><input id="samplerBoundary" type="range" min="1" max="7" value="3"></div>
+      <div class="control"><label><span>RAW CFG</span><span id="rawCfgValue">3.5</span></label><input id="rawCfg" type="range" min="0" max="8" step="0.1" value="3.5"></div>
+      <div class="control"><label><span>Turbo CFG</span><span id="turboCfgValue">0</span></label><input id="turboCfg" type="range" min="0" max="4" step="0.1" value="0"></div>
+    </div>
+    <div class="separator"></div>
+    <div class="grid2">
+      <div><label class="row-label"><span>LoRA</span></label><select id="loraSelector"><option value="">LoRAなし</option></select></div>
+      <div class="control"><label><span>LoRA Strength</span><span id="loraStrengthValue">1.00</span></label><input id="loraStrength" type="range" min="0" max="1.5" step="0.05" value="1"></div>
+    </div>
+    <div class="buttons"><button id="refreshLoraButton">🔄 LoRA更新</button><button id="generateButton" class="primary">🧬 生成・融合編集</button></div>
+    <div id="generationStatus" class="status">待機中</div>
+    <div id="generatedArea" class="generated"></div>
+  </section>
+
+  <section class="card">
+    <h3>🧠 Krea 2 LoRA学習</h3>
+    <input id="loraDataset" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+    <div class="grid2" style="margin-top:8px"><input id="loraName" type="text" placeholder="LoRA名 例: my_style"><input id="triggerWord" type="text" placeholder="トリガーワード 例: imrstyle"></div>
+    <div class="grid2">
+      <div class="control"><label><span>Rank</span><span id="loraRankValue">32</span></label><input id="loraRank" type="range" min="8" max="128" step="8" value="32"></div>
+      <div class="control"><label><span>Steps</span><span id="loraStepsValue">1000</span></label><input id="loraSteps" type="range" min="200" max="3000" step="100" value="1000"></div>
+    </div>
+    <button id="trainLoraButton" class="primary" style="width:100%">🧠 LoRA学習開始</button>
+    <div class="progress"><div id="trainingProgress"></div></div>
+    <div id="trainingStatus" class="status">待機中</div>
+    <div id="trainingLogs" class="note"></div>
+  </section>
+
+  <section class="card">
+    <h3>🖼 通常ギャラリー</h3>
+    <div class="buttons"><button id="saveGalleryButton" class="green">現在画像を保存</button><button id="saveGeneratedGalleryButton">生成結果を保存</button></div>
+    <div id="gallery" class="gallery" style="margin-top:10px"></div>
+  </section>
+
+  <section class="card">
+    <h3>🔞 PIN付きプライベート保管庫</h3>
+    <div class="health"><span id="vaultStatus" class="badge">🔒 LOCKED</span></div>
+    <div class="buttons three" style="margin:10px 0"><button id="openVaultButton" class="primary">🔐 PINで開く</button><button id="saveVaultButton" class="green">現在画像を暗号化保存</button><button id="lockVaultButton">🔒 ロック</button></div>
+    <div id="privateGallery" class="gallery"><div class="empty">ロックされています</div></div>
+    <p class="note">4桁PINからPBKDF2で鍵を作り、画像はAES-GCMで端末内のIndexedDBへ暗号化保存。サムネイルぼかし・2分タイムアウトは入れてないよ。アプリをバックグラウンドへ送ると自動ロックする。</p>
+  </section>
+</div>
+
+<div id="pinModal" class="pin-modal"><div class="pin-box"><h3 id="pinTitle">🔐 PIN</h3><p id="pinMessage" class="note"></p><input id="pinInput" type="password" inputmode="numeric" maxlength="4" autocomplete="off"><button id="pinConfirm" class="primary" style="width:100%">解除</button><button id="pinCancel" style="width:100%;margin-top:8px">キャンセル</button></div></div>
+<div id="privacyShield" class="privacy-shield">🔒 NaturalFix<br><span class="small">タップして戻る</span></div>
+<script src="./config.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
