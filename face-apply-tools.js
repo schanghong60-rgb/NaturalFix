@@ -540,6 +540,7 @@
     ?.addEventListener(
       'change',
       () => {
+        window.NaturalFixFaceTools?.clearAll();
         needsRedetect = false;
 
         invalidateBase(
