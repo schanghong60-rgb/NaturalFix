@@ -17,6 +17,17 @@ const OLLAMA_URL = (process.env.OLLAMA_URL || 'http://127.0.0.1:11434').replace(
 const DOLPHIN_MODEL = process.env.DOLPHIN_MODEL || 'hf.co/dphn/Dolphin3.0-Llama3.1-8B-GGUF:Q4_K_M';
 const KREA_TURBO_WORKFLOW = path.resolve(ROOT, process.env.KREA_TURBO_WORKFLOW || './workflows/krea2_turbo.api.json');
 const KREA_TWOPASS_WORKFLOW = path.resolve(ROOT, process.env.KREA_TWOPASS_WORKFLOW || './workflows/krea2_twopass.api.json');
+const DECLUTTER_AUTO_WORKFLOW = path.resolve(
+  ROOT,
+  process.env.DECLUTTER_AUTO_WORKFLOW ||
+    './workflows/declutter_auto.api.json'
+);
+
+const DECLUTTER_INPAINT_WORKFLOW = path.resolve(
+  ROOT,
+  process.env.DECLUTTER_INPAINT_WORKFLOW ||
+    './workflows/declutter_inpaint.api.json'
+);
 const LORA_DIR = path.resolve(ROOT, process.env.LORA_DIR || './loras');
 const LORA_SCRIPT = process.env.KREA2_LORA_SCRIPT ? path.resolve(ROOT, process.env.KREA2_LORA_SCRIPT) : '';
 const ACCELERATE_BIN = process.env.ACCELERATE_BIN || 'accelerate';
@@ -266,6 +277,9 @@ app.get('/api/health', async (_req, res) => {
     dolphin: ollama,
     turboWorkflow: fs.existsSync(KREA_TURBO_WORKFLOW),
     twoPassWorkflow: fs.existsSync(KREA_TWOPASS_WORKFLOW),
+declutterAutoWorkflow: fs.existsSync(DECLUTTER_AUTO_WORKFLOW),
+declutterInpaintWorkflow: fs.existsSync(DECLUTTER_INPAINT_WORKFLOW),
+    
     loraTraining: Boolean(LORA_SCRIPT && fs.existsSync(LORA_SCRIPT)),
     secureContextRequiredForInstall: true
   });
@@ -580,6 +594,192 @@ app.post('/api/generate', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+/* ---------------- AI Declutter API ---------------- */
+
+async function buildDeclutterWorkflow(body = {}) {
+  const mode =
+    body.mode === 'manual' ? 'manual' : 'auto';
+
+  const workflowFile =
+    mode === 'manual'
+      ? DECLUTTER_INPAINT_WORKFLOW
+      : DECLUTTER_AUTO_WORKFLOW;
+
+  if (!fs.existsSync(workflowFile)) {
+    throw new Error(
+      mode === 'manual'
+        ? '手動デクラッター用Workflowがありません'
+        : '自動デクラッター用Workflowがありません'
+    );
+  }
+
+  if (!body.baseImage) {
+    throw new Error('元画像がありません');
+  }
+
+  const workflow =
+    await loadWorkflow(workflowFile);
+
+  const baseName =
+    await comfyUpload(
+      body.baseImage,
+      `naturalfix_declutter_base_${Date.now()}.png`
+    );
+
+  patchTag(
+    workflow,
+    'NF_BASE_IMAGE',
+    ['image'],
+    baseName
+  );
+
+  if (mode === 'manual') {
+    if (!body.mask) {
+      throw new Error(
+        '手動モードでは消したい場所を塗ってね'
+      );
+    }
+
+    const maskName =
+      await comfyUpload(
+        body.mask,
+        `naturalfix_declutter_mask_${Date.now()}.png`
+      );
+
+    patchTag(
+      workflow,
+      'NF_MASK',
+      ['image'],
+      maskName
+    );
+  }
+
+  const strength =
+    clamp(body.strength ?? 60, 0, 100) / 100;
+
+  patchTag(
+    workflow,
+    'NF_STRENGTH',
+    [
+      'strength',
+      'denoise',
+      'weight',
+      'value'
+    ],
+    strength,
+    true
+  );
+
+  const seed =
+    Number.isFinite(Number(body.seed))
+      ? Number(body.seed)
+      : Math.floor(
+          Math.random() * 2_147_483_647
+        );
+
+  patchTag(
+    workflow,
+    'NF_SEED',
+    ['seed', 'noise_seed'],
+    seed
+  );
+
+  let prompt =
+    String(body.prompt || '').trim();
+
+  if (mode === 'auto') {
+    prompt = [
+      'Remove visual clutter, small unnecessary objects, trash and distracting items.',
+      'Keep the scene natural and clean.',
+      body.protectPerson
+        ? 'Preserve people, faces, body shape, clothing and identity.'
+        : '',
+      body.keepBackground
+        ? 'Preserve the original room, furniture, architecture and overall background.'
+        : '',
+      prompt
+    ]
+      .filter(Boolean)
+      .join(' ');
+  } else {
+    prompt = [
+      'Remove only the masked area.',
+      'Reconstruct the missing area naturally using the surrounding image.',
+      body.protectPerson
+        ? 'Do not alter unmasked people, faces or bodies.'
+        : '',
+      body.keepBackground
+        ? 'Keep the surrounding background unchanged.'
+        : '',
+      prompt
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  patchTag(
+    workflow,
+    'NF_PROMPT',
+    ['text', 'prompt'],
+    prompt
+  );
+
+  patchTag(
+    workflow,
+    'NF_NEGATIVE',
+    ['text', 'prompt'],
+    'distorted face, changed identity, duplicate objects, malformed anatomy, artifacts, blurry reconstruction'
+  );
+
+  return {
+    workflow,
+    outputNodeId:
+      workflowOutputNodeId(workflow),
+    mode
+  };
+}
+
+app.post('/api/declutter', async (req, res) => {
+  try {
+    const body = req.body || {};
+
+    const {
+      workflow,
+      outputNodeId,
+      mode
+    } = await buildDeclutterWorkflow(body);
+
+    const promptId =
+      await comfyQueue(workflow);
+
+    const imageInfo =
+      await comfyWait(
+        promptId,
+        outputNodeId
+      );
+
+    const image =
+      await comfyImageAsDataUrl(
+        imageInfo
+      );
+
+    res.json({
+      image,
+      promptId,
+      mode
+    });
+
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error:
+        error.message ||
+        'デクラッター処理に失敗しました'
+    });
+  }
+});
+
 
 app.get('/api/loras', async (_req, res) => {
   try {
