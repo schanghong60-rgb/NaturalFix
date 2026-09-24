@@ -590,6 +590,163 @@ $('generatePartButton')?.addEventListener('click',async()=>{
   }catch(e){console.error(e);$('partGenerationStatus').textContent=`⚠️ ${e.message}`;}finally{$('generatePartButton').disabled=false;}
 });
 
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+/* ---------------- Image -> Video UI ---------------- */
+
+$('videoDuration')?.addEventListener('input', () => {
+  $('videoDurationValue').textContent = `${$('videoDuration').value}秒`;
+});
+
+$('videoMotion')?.addEventListener('input', () => {
+  $('videoMotionValue').textContent = $('videoMotion').value;
+});
+
+$('generateVideoButton')?.addEventListener('click', async () => {
+  if (!loaded) {
+    alert('先に画像を読み込んでね');
+    return;
+  }
+
+  const button = $('generateVideoButton');
+  const downloadButton = $('downloadVideoButton');
+  const status = $('videoGenerationStatus');
+  const area = $('videoGeneratedArea');
+
+  button.disabled = true;
+  downloadButton.disabled = true;
+
+  status.textContent = '🎬 動画生成を開始中…';
+  area.innerHTML = '';
+
+  try {
+    if (
+      $('videoUseParts')?.checked &&
+      !currentLandmarks &&
+      !currentPoseLandmarks
+    ) {
+      await analyzeCharacterParts(true);
+    }
+
+    const baseImage = await exportCurrentDataURL(0.92);
+
+    const payload = {
+      prompt:
+        $('videoPrompt')?.value.trim() ||
+        '自然で滑らかな短いアニメーション',
+
+      baseImage,
+
+      duration: Number(
+        $('videoDuration')?.value || 5
+      ),
+
+      motionStrength: Number(
+        $('videoMotion')?.value || 50
+      ),
+
+      camera:
+        $('videoCamera')?.value || 'none',
+
+      quality:
+        $('videoQuality')?.value || 'balanced',
+
+      keepCharacter:
+        !!$('videoKeepCharacter')?.checked,
+
+      useParts:
+        !!$('videoUseParts')?.checked,
+
+      loop:
+        !!$('videoLoop')?.checked,
+
+      mode: generationMode,
+
+      performance:
+        $('performanceMode')?.value || 'fast',
+
+      useDolphin:
+        !!$('useDolphin')?.checked,
+
+      seed:
+        Number($('seed')?.value || 42)
+    };
+
+    const result = await apiFetch(
+      '/api/video/generate',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    if (!result.video) {
+      throw new Error(
+        '動画データを受け取れなかったよ'
+      );
+    }
+
+    area.innerHTML = `
+      <video
+        id="generatedVideo"
+        controls
+        playsinline
+        ${payload.loop ? 'loop' : ''}
+        style="
+          width:100%;
+          max-width:100%;
+          border-radius:14px;
+          margin-top:10px;
+        "
+      ></video>
+    `;
+
+    const video = $('generatedVideo');
+    video.src = result.video;
+
+    downloadButton.disabled = false;
+
+    downloadButton.onclick = () => {
+      const a = document.createElement('a');
+
+      a.href = result.video;
+
+      a.download =
+        `NaturalFix_video_${Date.now()}.mp4`;
+
+      a.click();
+    };
+
+    status.textContent =
+      '✅ 動画生成完了';
+
+  } catch (e) {
+    console.error(e);
+
+    status.textContent =
+      `⚠️ ${e.message}`;
+
+  } finally {
+    button.disabled = false;
+  }
+});
 initCharacterPartModels();
 
 await openDb(); await renderGallery(); updateLabels();
