@@ -240,22 +240,623 @@ $('downloadButton').addEventListener('click', async () => {
   const data = await exportCurrentDataURL(0.95); if (!data) return;
   const a = document.createElement('a'); a.href = data; a.download = `NaturalFix_${Date.now()}.jpg`; a.click();
 });
+/* ---------------- AI Declutter ---------------- */
 
+let declutterMaskCanvas = null;
+let declutterMaskCtx = null;
+let declutterDrawing = false;
+let declutterTool = 'paint';
+
+let declutterBeforeImage = null;
+let declutterAfterImage = null;
+let declutterUndoImage = null;
+
+function initDeclutterMaskCanvas() {
+  if (declutterMaskCanvas) return declutterMaskCanvas;
+
+  const wrap = canvas.parentElement;
+  if (!wrap) return null;
+
+  wrap.style.position = 'relative';
+
+  declutterMaskCanvas = document.createElement('canvas');
+  declutterMaskCanvas.id = 'declutterMaskCanvas';
+
+  Object.assign(declutterMaskCanvas.style, {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: '100%',
+    height: '100%',
+    zIndex: '5',
+    pointerEvents: 'none',
+    touchAction: 'none',
+    opacity: '0.55'
+  });
+
+  wrap.appendChild(declutterMaskCanvas);
+
+  declutterMaskCtx =
+    declutterMaskCanvas.getContext('2d');
+
+  syncDeclutterMaskCanvas();
+
+  declutterMaskCanvas.addEventListener(
+    'pointerdown',
+    startDeclutterStroke
+  );
+
+  declutterMaskCanvas.addEventListener(
+    'pointermove',
+    moveDeclutterStroke
+  );
+
+  declutterMaskCanvas.addEventListener(
+    'pointerup',
+    endDeclutterStroke
+  );
+
+  declutterMaskCanvas.addEventListener(
+    'pointercancel',
+    endDeclutterStroke
+  );
+
+  return declutterMaskCanvas;
+}
+
+function syncDeclutterMaskCanvas() {
+  if (!declutterMaskCanvas) return;
+
+  if (
+    declutterMaskCanvas.width !== canvas.width ||
+    declutterMaskCanvas.height !== canvas.height
+  ) {
+    declutterMaskCanvas.width = canvas.width;
+    declutterMaskCanvas.height = canvas.height;
+  }
+}
+
+function declutterPointerPosition(event) {
+  const rect =
+    declutterMaskCanvas.getBoundingClientRect();
+
+  return {
+    x:
+      (event.clientX - rect.left) *
+      (declutterMaskCanvas.width / rect.width),
+
+    y:
+      (event.clientY - rect.top) *
+      (declutterMaskCanvas.height / rect.height)
+  };
+}
+
+function configureDeclutterBrush() {
+  if (!declutterMaskCtx) return;
+
+  const size = Number(
+    $('declutterBrushSize')?.value || 40
+  );
+
+  declutterMaskCtx.lineWidth = size;
+  declutterMaskCtx.lineCap = 'round';
+  declutterMaskCtx.lineJoin = 'round';
+
+  if (declutterTool === 'erase') {
+    declutterMaskCtx.globalCompositeOperation =
+      'destination-out';
+
+    declutterMaskCtx.strokeStyle =
+      'rgba(255,255,255,1)';
+  } else {
+    declutterMaskCtx.globalCompositeOperation =
+      'source-over';
+
+    declutterMaskCtx.strokeStyle =
+      'rgba(255,70,70,1)';
+  }
+}
+
+function startDeclutterStroke(event) {
+  if (
+    $('declutterMode')?.value !== 'manual' ||
+    !loaded
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+
+  syncDeclutterMaskCanvas();
+  configureDeclutterBrush();
+
+  declutterDrawing = true;
+
+  try {
+    declutterMaskCanvas.setPointerCapture(
+      event.pointerId
+    );
+  } catch {}
+
+  const point =
+    declutterPointerPosition(event);
+
+  declutterMaskCtx.beginPath();
+  declutterMaskCtx.moveTo(point.x, point.y);
+  declutterMaskCtx.lineTo(point.x, point.y);
+  declutterMaskCtx.stroke();
+
+  $('declutterMaskStatus').textContent =
+    declutterTool === 'erase'
+      ? '🧽 マスクを消してるよ'
+      : '🖌 消したい部分を塗ってるよ';
+}
+
+function moveDeclutterStroke(event) {
+  if (!declutterDrawing) return;
+
+  event.preventDefault();
+
+  const point =
+    declutterPointerPosition(event);
+
+  declutterMaskCtx.lineTo(point.x, point.y);
+  declutterMaskCtx.stroke();
+}
+
+function endDeclutterStroke(event) {
+  if (!declutterDrawing) return;
+
+  declutterDrawing = false;
+
+  if (declutterMaskCtx) {
+    declutterMaskCtx.closePath();
+  }
+
+  try {
+    declutterMaskCanvas.releasePointerCapture(
+      event.pointerId
+    );
+  } catch {}
+
+  $('declutterMaskStatus').textContent =
+    declutterTool === 'erase'
+      ? '🧽 マスク消去モード'
+      : '✅ 塗った部分をAIで消せるよ';
+}
+
+function clearDeclutterMask() {
+  if (!declutterMaskCanvas || !declutterMaskCtx) {
+    return;
+  }
+
+  declutterMaskCtx.clearRect(
+    0,
+    0,
+    declutterMaskCanvas.width,
+    declutterMaskCanvas.height
+  );
+
+  $('declutterMaskStatus').textContent =
+    '♻️ マスクを全部消したよ';
+}
+
+function getDeclutterMaskDataURL() {
+  if (!declutterMaskCanvas || !declutterMaskCtx) {
+    return null;
+  }
+
+  const src =
+    declutterMaskCtx.getImageData(
+      0,
+      0,
+      declutterMaskCanvas.width,
+      declutterMaskCanvas.height
+    );
+
+  const out =
+    document.createElement('canvas');
+
+  out.width = declutterMaskCanvas.width;
+  out.height = declutterMaskCanvas.height;
+
+  const outCtx = out.getContext('2d');
+
+  const mask =
+    outCtx.createImageData(
+      out.width,
+      out.height
+    );
+
+  let hasMask = false;
+
+  for (
+    let i = 0;
+    i < src.data.length;
+    i += 4
+  ) {
+    const painted = src.data[i + 3] > 10;
+
+    if (painted) hasMask = true;
+
+    const value = painted ? 255 : 0;
+
+    mask.data[i] = value;
+    mask.data[i + 1] = value;
+    mask.data[i + 2] = value;
+    mask.data[i + 3] = 255;
+  }
+
+  if (!hasMask) return null;
+
+  outCtx.putImageData(mask, 0, 0);
+
+  return out.toDataURL('image/png');
+}
+
+function setDeclutterMaskVisible(visible) {
+  const maskCanvas =
+    initDeclutterMaskCanvas();
+
+  if (!maskCanvas) return;
+
+  maskCanvas.style.display =
+    visible ? 'block' : 'none';
+
+  maskCanvas.style.pointerEvents =
+    visible ? 'auto' : 'none';
+}
+
+async function exportDeclutterBaseImage() {
+  const guideIds = [
+    'showGuide',
+    'showDistortion',
+    'showPoseGuide',
+    'showHandGuide'
+  ];
+
+  const states =
+    guideIds.map((id) => ({
+      id,
+      checked: $(id)?.checked
+    }));
+
+  for (const item of states) {
+    if ($(item.id)) {
+      $(item.id).checked = false;
+    }
+  }
+
+  const image =
+    await exportCurrentDataURL(0.95);
+
+  for (const item of states) {
+    if ($(item.id)) {
+      $(item.id).checked =
+        !!item.checked;
+    }
+  }
+
+  scheduleDraw();
+
+  return image;
+}
+
+function showDeclutterComparison(type) {
+  const image =
+    type === 'before'
+      ? declutterBeforeImage
+      : declutterAfterImage;
+
+  if (!image) {
+    $('declutterCompareArea').innerHTML =
+      '<div class="empty">比較画像がまだないよ</div>';
+
+    return;
+  }
+
+  $('declutterCompareArea').innerHTML = `
+    <img
+      id="declutterCompareImage"
+      alt="Declutter comparison"
+      style="
+        width:100%;
+        max-width:100%;
+        border-radius:12px;
+      "
+    >
+  `;
+
+  $('declutterCompareImage').src = image;
+}
+
+$('declutterMode')?.addEventListener(
+  'change',
+  () => {
+    const manual =
+      $('declutterMode').value === 'manual';
+
+    $('declutterManualTools').style.display =
+      manual ? 'block' : 'none';
+
+    setDeclutterMaskVisible(manual);
+
+    $('declutterStatus').textContent =
+      manual
+        ? '🖌 消したい部分を指で塗ってね'
+        : '🧹 AIが不要物を自動で探すよ';
+  }
+);
+
+$('declutterStrength')?.addEventListener(
+  'input',
+  () => {
+    $('declutterStrengthValue').textContent =
+      $('declutterStrength').value;
+  }
+);
+
+$('declutterBrushSize')?.addEventListener(
+  'input',
+  () => {
+    $('declutterBrushSizeValue').textContent =
+      $('declutterBrushSize').value;
+  }
+);
+$('declutterMaskOpacity')?.addEventListener(
+  'input',
+  () => {
+    $('declutterMaskOpacityValue').textContent =
+      $('declutterMaskOpacity').value;
+
+    const maskCanvas =
+      initDeclutterMaskCanvas();
+
+    if (maskCanvas) {
+      maskCanvas.style.opacity =
+        String(
+          Number(
+            $('declutterMaskOpacity').value
+          ) / 100
+        );
+    }
+  }
+);
+
+$('declutterBrushButton')?.addEventListener(
+  'click',
+  () => {
+    if (!loaded) {
+      alert('先に画像を読み込んでね');
+      return;
+    }
+
+    declutterTool = 'paint';
+    setDeclutterMaskVisible(true);
+
+    $('declutterMaskStatus').textContent =
+      '🖌 消したい部分を指で塗ってね';
+  }
+);
+
+$('declutterEraseMaskButton')?.addEventListener(
+  'click',
+  () => {
+    declutterTool = 'erase';
+    setDeclutterMaskVisible(true);
+
+    $('declutterMaskStatus').textContent =
+      '🧽 マスクを消すモード';
+  }
+);
+
+$('declutterClearMaskButton')?.addEventListener(
+  'click',
+  () => {
+    clearDeclutterMask();
+  }
+);
+
+$('declutterBeforeButton')?.addEventListener(
+  'click',
+  () => {
+    showDeclutterComparison('before');
+  }
+);
+
+$('declutterAfterButton')?.addEventListener(
+  'click',
+  () => {
+    showDeclutterComparison('after');
+  }
+);
+
+$('declutterUndoButton')?.addEventListener(
+  'click',
+  async () => {
+    if (!declutterUndoImage) {
+      $('declutterStatus').textContent =
+        '↩ 戻せる画像がまだないよ';
+      return;
+    }
+
+    await loadImageData(declutterUndoImage);
+
+    declutterAfterImage = null;
+
+    $('declutterStatus').textContent =
+      '↩ デクラッター前に戻したよ';
+
+    $('declutterResultArea').innerHTML = '';
+
+    showDeclutterComparison('before');
+  }
+);
+
+$('runDeclutterButton')?.addEventListener(
+  'click',
+  async () => {
+    if (!loaded) {
+      alert('先に画像を読み込んでね');
+      return;
+    }
+
+    const button = $('runDeclutterButton');
+    const mode = $('declutterMode').value;
+
+    button.disabled = true;
+
+    $('declutterStatus').textContent =
+      mode === 'manual'
+        ? '🖌 指定部分をAIで自然に消去中…'
+        : '🧹 AIが不要物を探して整理中…';
+
+    try {
+      const baseImage =
+        await exportDeclutterBaseImage();
+
+      const mask =
+        mode === 'manual'
+          ? getDeclutterMaskDataURL()
+          : null;
+
+      if (mode === 'manual' && !mask) {
+        throw new Error(
+          '消したい部分を先に塗ってね'
+        );
+      }
+
+      declutterBeforeImage = baseImage;
+      declutterUndoImage = baseImage;
+
+      const payload = {
+        mode,
+        baseImage,
+        mask,
+        prompt:
+          $('declutterPrompt')?.value.trim() || '',
+        strength:
+          Number(
+            $('declutterStrength')?.value || 60
+          ),
+        quality:
+          $('declutterQuality')?.value ||
+          'balanced',
+        protectPerson:
+          !!$('declutterProtectPerson')?.checked,
+        keepBackground:
+          !!$('declutterKeepBackground')?.checked,
+        seed:
+          Number($('seed')?.value || 42)
+      };
+
+      const r = await apiFetch(
+        '/api/declutter',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        }
+      );
+
+      const result = await r.json();
+
+      if (!r.ok) {
+        throw new Error(
+          result.error ||
+          'デクラッター処理に失敗しました'
+        );
+      }
+
+      if (!result.image) {
+        throw new Error(
+          'AIから画像を受け取れなかったよ'
+        );
+      }
+
+      declutterAfterImage = result.image;
+
+      $('declutterResultArea').innerHTML = `
+        <img
+          id="declutterResultImage"
+          alt="Declutter result"
+          style="
+            width:100%;
+            max-width:100%;
+            border-radius:12px;
+          "
+        >
+      `;
+
+      $('declutterResultImage').src =
+        result.image;
+
+      await loadImageData(result.image);
+
+      clearDeclutterMask();
+
+      setDeclutterMaskVisible(
+        mode === 'manual'
+      );
+
+      showDeclutterComparison('after');
+
+      $('declutterStatus').textContent =
+        '✅ AIデクラッター完了';
+
+    } catch (e) {
+      console.error(e);
+
+      $('declutterStatus').textContent =
+        `⚠️ ${e.message}`;
+
+    } finally {
+      button.disabled = false;
+    }
+  }
+);
 /* ---------------- Face analysis ---------------- */
 async function initFaceModel() {
   try {
-    const { FilesetResolver, FaceLandmarker } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
-    const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
-    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task' },
-      runningMode: 'IMAGE', numFaces: 1
-    });
-    $('modelStatus').textContent = '✅ 顔解析AI準備OK';
+    const { FilesetResolver, FaceLandmarker } = await import(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm'
+    );
+
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+    );
+
+    faceLandmarker = await FaceLandmarker.createFromOptions(
+      vision,
+      {
+        baseOptions: {
+          modelAssetPath:
+            'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
+        },
+        runningMode: 'IMAGE',
+        numFaces: 1
+      }
+    );
+
+    $('modelStatus').textContent =
+      '✅ 顔解析AI準備OK';
+
   } catch (e) {
-    console.error(e); $('modelStatus').textContent = '⚠️ 顔解析AIを読み込めなかったよ（画像補正は使える）';
+    console.error(e);
+
+    $('modelStatus').textContent =
+      '⚠️ 顔解析AIを読み込めなかったよ（画像補正は使える）';
   }
 }
+
 initFaceModel();
+
+
+
+    
+
 
 function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 function calculateFaceAnalysis(landmarks) {
