@@ -65,7 +65,170 @@
     </div>
     <p class="note">輪郭指数は正面度・表情・撮影角度でも変わる簡易指標。画像加工の有無を断定するものではないよ。</p>
   </section>
+  <section class="card" id="declutterStudio">
 
+  <h3>🧹 AIデクラッター</h3>
+
+  <p class="note">
+    写真の小物・ゴミ・背景の散らかりをAIで整理したり、
+    指でなぞった部分だけを自然に消して背景を再生成できるよ。
+  </p>
+
+  <div class="grid2">
+    <div>
+      <label class="row-label"><span>デクラッター方法</span></label>
+      <select id="declutterMode">
+        <option value="auto" selected>🧹 自動デクラッター</option>
+        <option value="manual">🖌 手動で消す</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="row-label"><span>処理品質</span></label>
+      <select id="declutterQuality">
+        <option value="fast">高速</option>
+        <option value="balanced" selected>標準</option>
+        <option value="quality">高画質</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="separator"></div>
+
+  <div class="checks">
+    <label class="check">
+      <input id="declutterProtectPerson" type="checkbox" checked>
+      👤 人物を保護
+    </label>
+
+    <label class="check">
+      <input id="declutterKeepBackground" type="checkbox" checked>
+      🏠 背景を維持
+    </label>
+  </div>
+
+  <div class="control">
+    <label>
+      <span>デクラッター強度</span>
+      <span id="declutterStrengthValue">60</span>
+    </label>
+
+    <input
+      id="declutterStrength"
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      value="60"
+    >
+  </div>
+
+  <div class="separator"></div>
+
+  <div id="declutterManualTools" style="display:none">
+
+    <h4>🖌 手動デクラッター</h4>
+
+    <p class="note">
+      消したい場所を指でなぞってね。
+      塗った部分だけAIが周囲になじむように再生成するよ。
+    </p>
+
+    <div class="control">
+      <label>
+        <span>ブラシサイズ</span>
+        <span id="declutterBrushSizeValue">40</span>
+      </label>
+
+      <input
+        id="declutterBrushSize"
+        type="range"
+        min="5"
+        max="150"
+        step="1"
+        value="40"
+      >
+    </div>
+
+    <div class="control">
+      <label>
+        <span>マスク表示濃度</span>
+        <span id="declutterMaskOpacityValue">55</span>
+      </label>
+
+      <input
+        id="declutterMaskOpacity"
+        type="range"
+        min="10"
+        max="100"
+        step="5"
+        value="55"
+      >
+    </div>
+
+    <div class="buttons three">
+      <button id="declutterBrushButton" class="primary">
+        🖌 ブラシ開始
+      </button>
+
+      <button id="declutterEraseMaskButton">
+        🧽 マスクを消す
+      </button>
+
+      <button id="declutterClearMaskButton">
+        ♻️ 全マスク削除
+      </button>
+    </div>
+
+    <div id="declutterMaskStatus" class="status">
+      手動モードでは画像上を指でなぞってね
+    </div>
+
+  </div>
+
+  <div class="separator"></div>
+
+  <div class="control">
+    <label><span>追加指示</span></label>
+
+    <textarea
+      id="declutterPrompt"
+      rows="3"
+      placeholder="例：机の上の小物だけ消して、人物と家具は残す"
+    ></textarea>
+  </div>
+
+  <div class="buttons">
+    <button id="runDeclutterButton" class="primary">
+      ✨ AIデクラッター実行
+    </button>
+
+    <button id="declutterUndoButton">
+      ↩ Undo
+    </button>
+  </div>
+
+  <div id="declutterStatus" class="status">待機中</div>
+  
+
+<div class="separator"></div>
+
+<h4>🆚 Before / After</h4>
+
+<div class="buttons">
+  <button id="declutterBeforeButton">
+    Before
+  </button>
+
+  <button id="declutterAfterButton" class="green">
+    After
+  </button>
+</div>
+
+<div id="declutterCompareArea" class="generated"></div>
+<div id="declutterResultArea" class="generated"></div>
+
+  </section>
   <section class="card" id="videoPartStudio">
     <h3>🎬 動画用キャラクターパーツ・スタジオ</h3>
     <p class="note">読み込んだキャラクターを顔・手・腕・胴体・脚などに細かく解析して、見えている部分はローカル抽出、必要な部分はAIで同じキャラクターの動画用リファレンス素材として生成できるよ。</p>
