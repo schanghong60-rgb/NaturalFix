@@ -474,4 +474,196 @@
       multiFaceLandmarker =
         await FaceLandmarker
           .createFromOptions(
-            vision
+            vision,
+            {
+              baseOptions: {
+                modelAssetPath:
+                  'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
+              },
+
+              runningMode: 'IMAGE',
+              numFaces: 8,
+              minFaceDetectionConfidence: 0.45,
+              minFacePresenceConfidence: 0.45,
+              minTrackingConfidence: 0.45
+            }
+          );
+
+      setStatus(
+        '✅ 複数人物認識AI準備OK'
+      );
+    } catch (error) {
+      console.error(error);
+
+      setStatus(
+        '⚠️ 複数人物認識AIを読み込めなかったよ'
+      );
+    }
+  }
+
+  async function detectPeople() {
+    if (busy) return;
+
+    if (!multiFaceLandmarker) {
+      setStatus(
+        'まだAIを準備中だよ。少し待ってからもう一度押してね'
+      );
+      return;
+    }
+
+    if (
+      !mainCanvas.width ||
+      !mainCanvas.height
+    ) {
+      setStatus(
+        '先に画像を読み込んでね'
+      );
+      return;
+    }
+
+    busy = true;
+
+    const button =
+      $('nfDetectPeople');
+
+    if (button) {
+      button.disabled = true;
+    }
+
+    setStatus(
+      '🔍 複数人物を認識中…'
+    );
+
+    try {
+      const result =
+        multiFaceLandmarker
+          .detect(mainCanvas);
+
+      const faces =
+        result.faceLandmarks || [];
+
+      detectedPeople =
+        faces.map(
+          (landmarks) => ({
+            landmarks,
+            box: faceBox(landmarks)
+          })
+        );
+
+      detectedPeople.sort(
+        (a, b) => {
+          const ay =
+            a.box.y +
+            a.box.h / 2;
+
+          const by =
+            b.box.y +
+            b.box.h / 2;
+
+          if (
+            Math.abs(ay - by) >
+            0.18
+          ) {
+            return ay - by;
+          }
+
+          return (
+            a.box.x -
+            b.box.x
+          );
+        }
+      );
+
+      selectedPersonIndex =
+        detectedPeople.length
+          ? 0
+          : -1;
+
+      renderPeopleList();
+      drawOverlay();
+
+      if (!detectedPeople.length) {
+        setStatus(
+          '顔を検出できなかったよ。顔が見える画像で試してね'
+        );
+      } else {
+        setStatus(
+          `✅ ${detectedPeople.length}人を認識したよ`
+        );
+
+        window.dispatchEvent(
+          new CustomEvent(
+            'naturalfix:people-detected',
+            {
+              detail: {
+                people: detectedPeople,
+                selectedIndex:
+                  selectedPersonIndex
+              }
+            }
+          )
+        );
+      }
+    } catch (error) {
+      console.error(error);
+
+      clearPeople();
+
+      setStatus(
+        `⚠️ 認識エラー: ${
+          error.message ||
+          'unknown error'
+        }`
+      );
+    } finally {
+      busy = false;
+
+      if (button) {
+        button.disabled = false;
+      }
+    }
+  }
+
+  $('nfDetectPeople')
+    ?.addEventListener(
+      'click',
+      detectPeople
+    );
+
+  $('nfClearPeople')
+    ?.addEventListener(
+      'click',
+      clearPeople
+    );
+
+  $('fileInput')
+    ?.addEventListener(
+      'change',
+      clearPeople
+    );
+
+  window.addEventListener(
+    'resize',
+    drawOverlay
+  );
+
+  window.NaturalFixPersons = {
+    getPeople:
+      () => detectedPeople,
+
+    getSelectedIndex:
+      () => selectedPersonIndex,
+
+    getSelectedPerson:
+      () =>
+        detectedPeople[
+          selectedPersonIndex
+        ] || null,
+
+    selectPerson,
+    clear: clearPeople,
+    detect: detectPeople
+  };
+
+  initMultiFaceModel();
+})();
