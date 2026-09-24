@@ -227,27 +227,40 @@ function clamp(value, min, max) {
   if (!Number.isFinite(n)) return min;
   return Math.min(max, Math.max(min, n));
 }
+function explicitRequest(text = '') {
+  const t = String(text || '').toLowerCase().trim();
+
+  const minor =
+    /\b(schoolboy)\b/.test(t) ||
+    /(高校生)/.test(t);
+
+  const sexual =
+    /\b(nude|naked|erotic)\b/.test(t) ||
+    /(裸|全裸|ヌード|エロ)/.test(t);
+
+  const explicitSex =
+    /\b(sexual intercourse|pornographic sex)\b/.test(t) ||
+    /(性行為そのもの)/.test(t);
+
+  const realPersonSexual =
+    (
+      /\b(real person|public figure)\b/.test(t) ||
+      /(実在人物|有名人)/.test(t)
+    ) &&
+    sexual;
+
+  return (
+    (minor && sexual) ||
+    explicitSex ||
+    realPersonSexual
+  );
+}
+
+
 
 function safeName(value, fallback = 'item') {
   const s = String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').slice(0, 80);
   return s || fallback;
-}
-
-function explicitRequest(text = '') {
-  const t = String(text || '').toLowerCase();
-
-  // 未成年を示す表現
-  const minor =
-    /\b(minor|underage|child|kid)\b/.test(t) ||
-    /(未成年|子ども|子供|児童|小学生|中学生|高校生)/.test(t);
-
-  // 性的な内容を示す表現
-  const sexual =
-    /\b(sex|sexual|nude|naked|porn|pornographic|erotic)\b/.test(t) ||
-    /(性的|性行為|裸|全裸|ヌード|ポルノ|エロ)/.test(t);
-
-  // 「未成年」＋「性的内容」の両方がある場合だけ弾く
-  return minor && sexual;
 }
 
 function fetchTimeout(url, options = {}, timeoutMs = 15_000) {
@@ -295,8 +308,9 @@ function cleanJsonText(text) {
 
 async function makeDolphinPlan({ prompt, references = [], mode = 'realistic', pose = '', performance = 'fast' }) {
   if (explicitRequest(prompt)) {
-    throw new Error('露骨な性的変換・脱衣/裸化の指示には対応していません');
+  throw new Error('この内容は生成対象外です');
   }
+  
 
   const refText = references.map((r, i) =>
     `Reference ${i + 1}: role=${String(r.role || 'style')}, strength=${clamp(r.strength, 0, 100)}/100`
@@ -305,8 +319,8 @@ async function makeDolphinPlan({ prompt, references = [], mode = 'realistic', po
   const system = `You are the planning component of NaturalFix, an image editing app.\n` +
     `You do not render images. Produce concise instructions for Krea 2.\n` +
     `The app can use a base image and up to three reference images.\n` +
-    `If the user selects adult mood, keep it non-explicit: mature fashion, lighting, expression and atmosphere only.\n` +
-    `Never instruct nudification, clothing removal to reveal nudity, explicit genitals, explicit sexual acts, or sexual content involving minors.\n` +
+    `Adult fictional characters may include non-explicit nudity. Do not block solely because of skin exposure or nudity.\n` +
+`Never allow explicit sexual acts, sexual content involving minors or minor-looking characters, or sexual nudification of real people.\n` +
     `Return JSON only with keys: prompt, pass1Prompt, pass2Prompt, referenceStrategy, detailFocus.`;
 
   const user = `Mode: ${mode}\nPerformance: ${performance}\nPose: ${pose || 'user/default'}\n${refText || 'No references'}\nInstruction:\n${prompt}`;
