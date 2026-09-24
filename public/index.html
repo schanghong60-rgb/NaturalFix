@@ -150,6 +150,154 @@
     <div id="partGeneratedArea" class="generated"></div>
     <div class="warning">動画用パーツ生成は、読み込んだキャラクターの見た目・衣装・色・形を維持するための資料作成用。脱衣・裸化・露骨な性的パーツ生成はしない仕様だよ。</div>
   </section>
+  <section class="card" id="imageToVideoStudio">
+  <h3>🎥 画像 → AI動画生成</h3>
+
+  <p class="note">
+    NaturalFixで読み込んだ画像を元に、AIで自然な動画を生成するよ。
+    キャラクターの顔・髪型・衣装・色をできるだけ維持して動かします。
+  </p>
+
+  <div class="control">
+    <label>
+      <span>動画の動き・内容</span>
+    </label>
+    <textarea
+      id="videoPrompt"
+      rows="4"
+      placeholder="例：自然にまばたきしながら、髪が風で少し揺れる。カメラはゆっくり近づく"
+    ></textarea>
+  </div>
+
+  <div class="grid2">
+
+    <div class="control">
+      <label>
+        <span>動画時間</span>
+        <span id="videoDurationValue">5秒</span>
+      </label>
+
+      <input
+        id="videoDuration"
+        type="range"
+        min="2"
+        max="10"
+        step="1"
+        value="5"
+      >
+    </div>
+
+    <div class="control">
+      <label>
+        <span>動きの強さ</span>
+        <span id="videoMotionValue">50</span>
+      </label>
+
+      <input
+        id="videoMotion"
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        value="50"
+      >
+    </div>
+
+  </div>
+
+  <div class="grid2">
+
+    <div>
+      <label class="row-label">
+        <span>カメラワーク</span>
+      </label>
+
+      <select id="videoCamera">
+        <option value="none">固定</option>
+        <option value="zoom_in">ゆっくりズームイン</option>
+        <option value="zoom_out">ゆっくりズームアウト</option>
+        <option value="pan_left">左へ移動</option>
+        <option value="pan_right">右へ移動</option>
+        <option value="orbit">ゆっくり回り込み</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="row-label">
+        <span>品質</span>
+      </label>
+
+      <select id="videoQuality">
+        <option value="fast">高速</option>
+        <option value="balanced" selected>標準</option>
+        <option value="quality">高画質</option>
+      </select>
+    </div>
+
+  </div>
+
+  <div class="checks">
+
+    <label class="check">
+      <input
+        id="videoKeepCharacter"
+        type="checkbox"
+        checked
+      >
+      キャラクターを維持
+    </label>
+
+    <label class="check">
+      <input
+        id="videoUseParts"
+        type="checkbox"
+        checked
+      >
+      パーツ解析結果を使用
+    </label>
+
+    <label class="check">
+      <input
+        id="videoLoop"
+        type="checkbox"
+      >
+      ループ向け動画
+    </label>
+
+  </div>
+
+  <div class="buttons">
+
+    <button
+      id="generateVideoButton"
+      class="primary"
+    >
+      🎬 AI動画を生成
+    </button>
+
+    <button
+      id="downloadVideoButton"
+      class="green"
+      disabled
+    >
+      💾 動画保存
+    </button>
+
+  </div>
+
+  <div
+    id="videoGenerationStatus"
+    class="status"
+  >
+    待機中
+  </div>
+
+  <div
+    id="videoGeneratedArea"
+    class="generated"
+  ></div>
+
+  </section>
 
   <section class="card">
     <h3>🧬 最大3枚 マルチリファレンス編集</h3>
