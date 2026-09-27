@@ -222,10 +222,662 @@ function loadImageData(src) {
   });
 }
 
-$('fileInput').addEventListener('change', (event) => {
-  const file = event.target.files?.[0]; if (!file) return;
-  const reader = new FileReader(); reader.onload = () => loadImageData(reader.result); reader.readAsDataURL(file);
-});
+/* ---------------- Multi Photo Studio ---------------- */
+let multiPhotos = [];
+
+function readMultiPhotoFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      resolve({
+        name: file.name,
+        src: reader.result
+      });
+    };
+
+    reader.onerror = () => {
+      reject(
+        new Error(
+          `画像を読み込めませんでした: ${file.name}`
+        )
+      );
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadMultiPhotoImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    image.onload = () => resolve(image);
+
+    image.onerror = () => {
+      reject(
+        new Error(
+          '画像の読み込みに失敗しました'
+        )
+      );
+    };
+
+    image.src = src;
+  });
+}
+
+function escapeMultiPhotoText(text) {
+  const div = document.createElement('div');
+  div.textContent = String(text || '');
+  return div.innerHTML;
+}
+
+function renderMultiPhotoList() {
+  const area = $('multiPhotoList');
+
+  if (!area) return;
+
+  if (!multiPhotos.length) {
+    area.innerHTML = '';
+
+    $('mergeMultiPhotosButton').disabled = true;
+
+    $('multiPhotoStatus').textContent =
+      '写真を複数選択してね';
+
+    return;
+  }
+
+  area.innerHTML = multiPhotos
+    .map((photo, index) => {
+      const name =
+        escapeMultiPhotoText(photo.name);
+
+      return `
+        <div style="
+          margin:10px 0;
+          padding:10px;
+          border:1px solid rgba(255,255,255,0.15);
+          border-radius:12px;
+        ">
+          <img
+            src="${photo.src}"
+            alt="${name}"
+            style="
+              width:100%;
+              max-height:220px;
+              object-fit:contain;
+              display:block;
+              border-radius:10px;
+            "
+          >
+
+          <div style="
+            margin-top:8px;
+            font-size:13px;
+            word-break:break-all;
+          ">
+            ${index + 1}. ${name}
+          </div>
+
+          <div
+            class="buttons three"
+            style="margin-top:8px"
+          >
+            <button
+              type="button"
+              data-multi-action="up"
+              data-multi-index="${index}"
+            >
+              ↑ 上へ
+            </button>
+
+            <button
+              type="button"
+              data-multi-action="down"
+              data-multi-index="${index}"
+            >
+              ↓ 下へ
+            </button>
+
+            <button
+              type="button"
+              data-multi-action="remove"
+              data-multi-index="${index}"
+            >
+              ✕ 削除
+            </button>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  $('mergeMultiPhotosButton').disabled = false;
+
+  $('multiPhotoStatus').textContent =
+    `${multiPhotos.length}枚の写真を選択中`;
+}
+
+function moveMultiPhoto(index, direction) {
+  const targetIndex =
+    index + direction;
+
+  if (
+    targetIndex < 0 ||
+    targetIndex >= multiPhotos.length
+  ) {
+    return;
+  }
+
+  const current =
+    multiPhotos[index];
+
+  multiPhotos[index] =
+    multiPhotos[targetIndex];
+
+  multiPhotos[targetIndex] =
+    current;
+
+  renderMultiPhotoList();
+}
+
+function removeMultiPhoto(index) {
+  if (
+    index < 0 ||
+    index >= multiPhotos.length
+  ) {
+    return;
+  }
+
+  multiPhotos.splice(index, 1);
+
+  renderMultiPhotoList();
+}
+
+$('multiPhotoList')?.addEventListener(
+  'click',
+  (event) => {
+    const button =
+      event.target.closest(
+        '[data-multi-action]'
+      );
+
+    if (!button) return;
+
+    const index =
+      Number(
+        button.dataset.multiIndex
+      );
+
+    const action =
+      button.dataset.multiAction;
+
+    if (action === 'up') {
+      moveMultiPhoto(index, -1);
+    }
+
+    if (action === 'down') {
+      moveMultiPhoto(index, 1);
+    }
+
+    if (action === 'remove') {
+      removeMultiPhoto(index);
+    }
+  }
+);
+
+$('fileInput').addEventListener(
+  'change',
+  async (event) => {
+    try {
+      const files =
+        Array.from(
+          event.target.files || []
+        );
+
+      if (!files.length) return;
+
+      const imageFiles =
+        files.filter((file) =>
+          String(file.type || '')
+            .startsWith('image/')
+        );
+
+      if (!imageFiles.length) {
+        $('multiPhotoStatus').textContent =
+          '画像ファイルを選択してね';
+
+        return;
+      }
+
+      $('multiPhotoStatus').textContent =
+        '写真を読み込み中…';
+
+      multiPhotos =
+        await Promise.all(
+          imageFiles.map(
+            readMultiPhotoFile
+          )
+        );
+
+      renderMultiPhotoList();
+
+      if (multiPhotos.length === 1) {
+        await loadImageData(
+          multiPhotos[0].src
+        );
+
+        $('multiPhotoStatus').textContent =
+          '1枚の写真をNaturalFixへ読み込んだよ';
+      }
+    } catch (error) {
+      console.error(error);
+
+      $('multiPhotoStatus').textContent =
+        `⚠️ ${
+          error.message ||
+          '写真の読み込みに失敗しました'
+        }`;
+    }
+  }
+);
+
+$('multiPhotoGap')?.addEventListener(
+  'input',
+  () => {
+    $('multiPhotoGapValue').textContent =
+      $('multiPhotoGap').value;
+  }
+);
+
+$('clearMultiPhotosButton')?.addEventListener(
+  'click',
+  () => {
+    multiPhotos = [];
+
+    $('fileInput').value = '';
+
+    renderMultiPhotoList();
+
+    $('multiPhotoStatus').textContent =
+      '写真をクリアしたよ';
+  }
+);
+
+function drawMultiPhotoCover(
+  targetCtx,
+  image,
+  x,
+  y,
+  width,
+  height
+) {
+  const imageRatio =
+    image.naturalWidth /
+    image.naturalHeight;
+
+  const boxRatio =
+    width / height;
+
+  let sourceX = 0;
+  let sourceY = 0;
+  let sourceWidth =
+    image.naturalWidth;
+  let sourceHeight =
+    image.naturalHeight;
+
+  if (imageRatio > boxRatio) {
+    sourceWidth =
+      image.naturalHeight *
+      boxRatio;
+
+    sourceX =
+      (
+        image.naturalWidth -
+        sourceWidth
+      ) / 2;
+  } else {
+    sourceHeight =
+      image.naturalWidth /
+      boxRatio;
+
+    sourceY =
+      (
+        image.naturalHeight -
+        sourceHeight
+      ) / 2;
+  }
+
+  targetCtx.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    x,
+    y,
+    width,
+    height
+  );
+}
+
+function drawMultiPhotoContain(
+  targetCtx,
+  image,
+  x,
+  y,
+  width,
+  height
+) {
+  const ratio =
+    Math.min(
+      width /
+        image.naturalWidth,
+      height /
+        image.naturalHeight
+    );
+
+  const drawWidth =
+    image.naturalWidth *
+    ratio;
+
+  const drawHeight =
+    image.naturalHeight *
+    ratio;
+
+  const drawX =
+    x +
+    (
+      width -
+      drawWidth
+    ) / 2;
+
+  const drawY =
+    y +
+    (
+      height -
+      drawHeight
+    ) / 2;
+
+  targetCtx.drawImage(
+    image,
+    drawX,
+    drawY,
+    drawWidth,
+    drawHeight
+  );
+}
+
+async function mergeMultiPhotos() {
+  if (!multiPhotos.length) {
+    $('multiPhotoStatus').textContent =
+      '写真を選択してね';
+
+    return;
+  }
+
+  const button =
+    $('mergeMultiPhotosButton');
+
+  try {
+    button.disabled = true;
+
+    $('multiPhotoStatus').textContent =
+      '写真を1枚にまとめています…';
+
+    if (multiPhotos.length === 1) {
+      await loadImageData(
+        multiPhotos[0].src
+      );
+
+      $('multiPhotoStatus').textContent =
+        '1枚の写真をNaturalFixへ読み込んだよ';
+
+      return;
+    }
+
+    const images =
+      await Promise.all(
+        multiPhotos.map(
+          (photo) =>
+            loadMultiPhotoImage(
+              photo.src
+            )
+        )
+      );
+
+    const count =
+      images.length;
+
+    const layout =
+      $('multiPhotoLayout')?.value ||
+      'auto';
+
+    const fit =
+      $('multiPhotoFit')?.value ||
+      'cover';
+
+    const gap =
+      Math.max(
+        0,
+        Number(
+          $('multiPhotoGap')?.value ||
+          0
+        )
+      );
+
+    let columns = 1;
+    let rows = 1;
+
+    if (layout === 'horizontal') {
+      columns = count;
+      rows = 1;
+    } else if (
+      layout === 'vertical'
+    ) {
+      columns = 1;
+      rows = count;
+    } else {
+      columns =
+        Math.ceil(
+          Math.sqrt(count)
+        );
+
+      rows =
+        Math.ceil(
+          count / columns
+        );
+    }
+
+    const baseCellSize = 800;
+    const maxSide = 2400;
+
+    const rawWidth =
+      columns * baseCellSize +
+      gap *
+        Math.max(
+          0,
+          columns - 1
+        );
+
+    const rawHeight =
+      rows * baseCellSize +
+      gap *
+        Math.max(
+          0,
+          rows - 1
+        );
+
+    const scale =
+      Math.min(
+        1,
+        maxSide /
+          Math.max(
+            rawWidth,
+            rawHeight
+          )
+      );
+
+    const cellWidth =
+      Math.max(
+        1,
+        Math.floor(
+          baseCellSize *
+          scale
+        )
+      );
+
+    const cellHeight =
+      Math.max(
+        1,
+        Math.floor(
+          baseCellSize *
+          scale
+        )
+      );
+
+    const scaledGap =
+      Math.max(
+        0,
+        Math.floor(
+          gap * scale
+        )
+      );
+
+    const outputWidth =
+      columns * cellWidth +
+      scaledGap *
+        Math.max(
+          0,
+          columns - 1
+        );
+
+    const outputHeight =
+      rows * cellHeight +
+      scaledGap *
+        Math.max(
+          0,
+          rows - 1
+        );
+
+    const mergeCanvas =
+      document.createElement(
+        'canvas'
+      );
+
+    mergeCanvas.width =
+      outputWidth;
+
+    mergeCanvas.height =
+      outputHeight;
+
+    const mergeCtx =
+      mergeCanvas.getContext(
+        '2d'
+      );
+
+    if (!mergeCtx) {
+      throw new Error(
+        '合成キャンバスを作れませんでした'
+      );
+    }
+
+    mergeCtx.fillStyle =
+      '#111318';
+
+    mergeCtx.fillRect(
+      0,
+      0,
+      outputWidth,
+      outputHeight
+    );
+
+    images.forEach(
+      (image, index) => {
+        const column =
+          index % columns;
+
+        const row =
+          Math.floor(
+            index / columns
+          );
+
+        const x =
+          column *
+          (
+            cellWidth +
+            scaledGap
+          );
+
+        const y =
+          row *
+          (
+            cellHeight +
+            scaledGap
+          );
+
+        if (fit === 'contain') {
+          drawMultiPhotoContain(
+            mergeCtx,
+            image,
+            x,
+            y,
+            cellWidth,
+            cellHeight
+          );
+        } else {
+          drawMultiPhotoCover(
+            mergeCtx,
+            image,
+            x,
+            y,
+            cellWidth,
+            cellHeight
+          );
+        }
+      }
+    );
+
+    const mergedDataUrl =
+      mergeCanvas.toDataURL(
+        'image/jpeg',
+        0.95
+      );
+
+    await loadImageData(
+      mergedDataUrl
+    );
+
+    $('multiPhotoStatus').textContent =
+      `${count}枚を1枚にまとめたよ。NaturalFix補正・AIデクラッター・AI画像生成で調整できます。`;
+
+    window.scrollTo({
+      top:
+        canvas.getBoundingClientRect()
+          .top +
+        window.scrollY -
+        20,
+      behavior: 'smooth'
+    });
+  } catch (error) {
+    console.error(error);
+
+    $('multiPhotoStatus').textContent =
+      `⚠️ ${
+        error.message ||
+        '写真の合成に失敗しました'
+      }`;
+  } finally {
+    button.disabled =
+      !multiPhotos.length;
+  }
+}
+
+$('mergeMultiPhotosButton')?.addEventListener(
+  'click',
+  mergeMultiPhotos
+);
 Object.values(controls).forEach((el) => el.addEventListener('input', () => { updateLabels(); scheduleDraw(); }));
 $('showGuide').addEventListener('change', scheduleDraw); $('showDistortion').addEventListener('change', scheduleDraw);
 $('flipButton').addEventListener('click', () => { if (!loaded) return; flip = !flip; scheduleDraw(); });
