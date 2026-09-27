@@ -21,11 +21,93 @@
     <div id="installHint" class="note"></div>
   </section>
 
-  <section class="card">
-    <h3>📷 スマホから画像を読み込む</h3>
-    <input id="fileInput" type="file" accept="image/*">
-    <div id="modelStatus" class="status">顔解析AIを準備中…</div>
-  </section>
+  <section class="card" id="multiPhotoStudio">
+  <h3>🧩 複数写真を1枚にまとめる</h3>
+
+  <p class="note">
+    複数の写真を選んで1枚にまとめます。
+    まとめた画像はNaturalFixの画像として読み込まれ、
+    補正・AIデクラッター・AI画像生成などに使えます。
+  </p>
+
+  <input
+    id="fileInput"
+    type="file"
+    accept="image/*"
+    multiple
+  >
+
+  <div class="grid2">
+    <div>
+      <label class="row-label">
+        <span>レイアウト</span>
+      </label>
+
+      <select id="multiPhotoLayout">
+        <option value="auto" selected>自動グリッド</option>
+        <option value="horizontal">横並び</option>
+        <option value="vertical">縦並び</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="row-label">
+        <span>写真の合わせ方</span>
+      </label>
+
+      <select id="multiPhotoFit">
+        <option value="cover" selected>枠いっぱい</option>
+        <option value="contain">写真全体を表示</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="control">
+    <label>
+      <span>写真の間隔</span>
+      <span id="multiPhotoGapValue">8</span>
+    </label>
+
+    <input
+      id="multiPhotoGap"
+      type="range"
+      min="0"
+      max="50"
+      step="1"
+      value="8"
+    >
+  </div>
+
+  <div
+    id="multiPhotoList"
+    class="generated"
+  ></div>
+
+  <div class="buttons">
+    <button id="clearMultiPhotosButton">
+      ♻️ 写真をクリア
+    </button>
+
+    <button
+      id="mergeMultiPhotosButton"
+      class="primary"
+      disabled
+    >
+      🧩 1枚にまとめてNaturalFixへ
+    </button>
+  </div>
+
+  <div
+    id="multiPhotoStatus"
+    class="status"
+  >
+    写真を複数選択してね
+  </div>
+
+  <div id="modelStatus" class="status">
+    顔解析AIを準備中…
+  </div>
+</section>
 
   <div class="canvas-wrap"><canvas id="canvas"></canvas></div>
 
