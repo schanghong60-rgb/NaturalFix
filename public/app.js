@@ -848,7 +848,10 @@ async function mergeMultiPhotos() {
     await loadImageData(
       mergedDataUrl
     );
+$('multiPhotoAiEditButton').disabled = false;
 
+$('multiPhotoAiStatus').textContent =
+  'AI修正の指示を入力してね';
     $('multiPhotoStatus').textContent =
       `${count}枚を1枚にまとめたよ。NaturalFix補正・AIデクラッター・AI画像生成で調整できます。`;
 
@@ -877,7 +880,42 @@ async function mergeMultiPhotos() {
 $('mergeMultiPhotosButton')?.addEventListener(
   'click',
   mergeMultiPhotos
+)
+
+
+$('multiPhotoAiEditButton')?.addEventListener(
+  'click',
+  () => {
+    if (!loaded) {
+      $('multiPhotoAiStatus').textContent =
+        '先に写真を1枚にまとめてね';
+      return;
+    }
+
+    const prompt =
+      $('multiPhotoAiPrompt')?.value.trim();
+
+    if (!prompt) {
+      $('multiPhotoAiStatus').textContent =
+        'AI修正の指示を入力してね';
+      return;
+    }
+
+    $('multiRefPrompt').value = prompt;
+
+    $('multiPhotoAiStatus').textContent =
+      '🤖 AI修正を開始します…';
+
+    $('generateButton').click();
+
+    $('generationStatus')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center'
+    });
+  }
 );
+
+
 Object.values(controls).forEach((el) => el.addEventListener('input', () => { updateLabels(); scheduleDraw(); }));
 $('showGuide').addEventListener('change', scheduleDraw); $('showDistortion').addEventListener('change', scheduleDraw);
 $('flipButton').addEventListener('click', () => { if (!loaded) return; flip = !flip; scheduleDraw(); });
