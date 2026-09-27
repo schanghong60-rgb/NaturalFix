@@ -104,6 +104,35 @@
     写真を複数選択してね
   </div>
 
+    <div class="separator"></div>
+
+<div class="control">
+  <label>
+    <span>AI修正の指示</span>
+  </label>
+
+  <textarea
+    id="multiPhotoAiPrompt"
+    rows="3"
+    placeholder="例：人物はそのままで、背景のつなぎ目を自然にして、全体の色味を統一"
+  ></textarea>
+</div>
+
+<button
+  id="multiPhotoAiEditButton"
+  class="primary"
+  disabled
+  style="width:100%"
+>
+  🤖 まとめた画像をAI修正
+</button>
+
+<div
+  id="multiPhotoAiStatus"
+  class="status"
+>
+  先に写真を1枚にまとめてね
+</div>
   <div id="modelStatus" class="status">
     顔解析AIを準備中…
   </div>
