@@ -1203,6 +1203,8 @@ async function runLocalDenoise() {
       workCanvas.toDataURL(
         'image/png'
       );
+    localDenoiseAfterImage =
+  result;
 
     for (
       const state of guideStates
