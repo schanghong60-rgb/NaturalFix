@@ -301,6 +301,60 @@
     画像を読み込んでね
   </div>
 </section>
+  <section class="card" id="local4kStudio">
+  <h3>🖼️ ローカル4K高画質書き出し</h3>
+
+  <p class="note">
+    元画像の縦横比を保ったまま、長辺を3840pxにして高品質保存します。
+    Herokuや外部AIは使いません。
+  </p>
+
+  <div class="grid2">
+    <div>
+      <label class="row-label">
+        <span>保存形式</span>
+      </label>
+
+      <select id="local4kFormat">
+        <option value="jpeg" selected>JPEG</option>
+        <option value="png">PNG</option>
+        <option value="webp">WebP</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="row-label">
+        <span>保存画質</span>
+        <span id="local4kQualityValue">98</span>
+      </label>
+
+      <input
+        id="local4kQuality"
+        type="range"
+        min="80"
+        max="100"
+        step="1"
+        value="98"
+      >
+    </div>
+  </div>
+
+  <button
+    id="local4kExportButton"
+    class="green"
+    type="button"
+    style="width:100%"
+  >
+    🖼️ 4K高画質で保存
+  </button>
+
+  <div
+    id="local4kStatus"
+    class="status"
+  >
+    画像を読み込んでね
+  </div>
+</section>
   <section class="card">
     <h3>✨ NaturalFix補正</h3>
     <div class="control"><label><span>自然化</span><span id="naturalValue">0</span></label><input id="natural" type="range" min="0" max="100" value="0"></div>
