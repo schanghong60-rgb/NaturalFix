@@ -915,6 +915,353 @@ $('multiPhotoAiEditButton')?.addEventListener(
     });
   }
 );
+/* ---------------- Local Denoise ---------------- */
+
+function updateLocalDenoiseStrengthLabel() {
+  const value = Math.max(
+    0,
+    Math.min(
+      100,
+      Number(
+        $('localDenoiseStrength')?.value || 40
+      )
+    )
+  );
+
+  if ($('localDenoiseStrengthValue')) {
+    $('localDenoiseStrengthValue').textContent =
+      String(value);
+  }
+}
+
+function clampDenoiseValue(value) {
+  return Math.max(
+    0,
+    Math.min(
+      255,
+      Math.round(value)
+    )
+  );
+}
+
+async function runLocalDenoise() {
+  if (!loaded) {
+    if ($('localDenoiseStatus')) {
+      $('localDenoiseStatus').textContent =
+        '⚠️ 先に画像を読み込んでね';
+    }
+
+    return;
+  }
+
+  const button =
+    $('localDenoiseButton');
+
+  const status =
+    $('localDenoiseStatus');
+
+  const guideIds = [
+    'showGuide',
+    'showDistortion',
+    'showPoseGuide',
+    'showHandGuide'
+  ];
+
+  const guideStates =
+    guideIds.map((id) => {
+      const element = $(id);
+
+      return {
+        element,
+        checked:
+          element
+            ? element.checked
+            : false
+      };
+    });
+
+  if (button) {
+    button.disabled = true;
+  }
+
+  try {
+    if (status) {
+      status.textContent =
+        '🧼 ノイズ除去中…';
+    }
+
+    for (
+      const state of guideStates
+    ) {
+      if (state.element) {
+        state.element.checked = false;
+      }
+    }
+
+    drawImage(true);
+
+    await new Promise(
+      (resolve) => {
+        requestAnimationFrame(
+          () => resolve()
+        );
+      }
+    );
+
+    const workCanvas =
+      document.createElement(
+        'canvas'
+      );
+
+    workCanvas.width =
+      canvas.width;
+
+    workCanvas.height =
+      canvas.height;
+
+    const workCtx =
+      workCanvas.getContext(
+        '2d',
+        {
+          willReadFrequently: true
+        }
+      );
+
+    if (!workCtx) {
+      throw new Error(
+        '画像処理を開始できなかったよ'
+      );
+    }
+
+    workCtx.drawImage(
+      canvas,
+      0,
+      0
+    );
+
+    const imageData =
+      workCtx.getImageData(
+        0,
+        0,
+        workCanvas.width,
+        workCanvas.height
+      );
+
+    const pixels =
+      imageData.data;
+
+    const source =
+      new Uint8ClampedArray(
+        pixels
+      );
+
+    const width =
+      imageData.width;
+
+    const height =
+      imageData.height;
+
+    const strength =
+      Math.max(
+        0,
+        Math.min(
+          100,
+          Number(
+            $('localDenoiseStrength')
+              ?.value || 40
+          )
+        )
+      );
+
+    const amount =
+      strength / 100;
+
+    for (
+      let y = 1;
+      y < height - 1;
+      y++
+    ) {
+      for (
+        let x = 1;
+        x < width - 1;
+        x++
+      ) {
+        const index =
+          (
+            y * width +
+            x
+          ) * 4;
+
+        const left =
+          index - 4;
+
+        const right =
+          index + 4;
+
+        const top =
+          index -
+          width * 4;
+
+        const bottom =
+          index +
+          width * 4;
+
+        for (
+          let channel = 0;
+          channel < 3;
+          channel++
+        ) {
+          const center =
+            source[
+              index + channel
+            ];
+
+          const average =
+            (
+              center * 2 +
+              source[
+                left + channel
+              ] +
+              source[
+                right + channel
+              ] +
+              source[
+                top + channel
+              ] +
+              source[
+                bottom + channel
+              ]
+            ) / 6;
+
+          const edge =
+            Math.max(
+              Math.abs(
+                center -
+                source[
+                  left + channel
+                ]
+              ),
+              Math.abs(
+                center -
+                source[
+                  right + channel
+                ]
+              ),
+              Math.abs(
+                center -
+                source[
+                  top + channel
+                ]
+              ),
+              Math.abs(
+                center -
+                source[
+                  bottom + channel
+                ]
+              )
+            );
+
+          const edgeProtection =
+            edge > 30
+              ? 0.2
+              : 1;
+
+          pixels[
+            index + channel
+          ] =
+            clampDenoiseValue(
+              center +
+              (
+                average -
+                center
+              ) *
+              amount *
+              edgeProtection
+            );
+        }
+      }
+
+      if (y % 120 === 0) {
+        await new Promise(
+          (resolve) => {
+            setTimeout(
+              resolve,
+              0
+            );
+          }
+        );
+      }
+    }
+
+    workCtx.putImageData(
+      imageData,
+      0,
+      0
+    );
+
+    const result =
+      workCanvas.toDataURL(
+        'image/png'
+      );
+
+    for (
+      const state of guideStates
+    ) {
+      if (state.element) {
+        state.element.checked =
+          state.checked;
+      }
+    }
+
+    await loadImageData(
+      result
+    );
+
+    if (status) {
+      status.textContent =
+        '✅ ローカルノイズ除去が完了しました';
+    }
+  } catch (error) {
+    console.error(error);
+
+    if (status) {
+      status.textContent =
+        `⚠️ ${
+          error.message ||
+          'ノイズ除去に失敗しました'
+        }`;
+    }
+  } finally {
+    for (
+      const state of guideStates
+    ) {
+      if (state.element) {
+        state.element.checked =
+          state.checked;
+      }
+    }
+
+    scheduleDraw();
+
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
+$('localDenoiseStrength')
+  ?.addEventListener(
+    'input',
+    updateLocalDenoiseStrengthLabel
+  );
+
+$('localDenoiseButton')
+  ?.addEventListener(
+    'click',
+    runLocalDenoise
+  );
+
+updateLocalDenoiseStrengthLabel();
 /* ---------------- Local Super Resolution ---------------- */
 
 function updateSuperResolutionStrengthLabel() {
