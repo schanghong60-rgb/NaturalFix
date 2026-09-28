@@ -1262,6 +1262,61 @@ $('localDenoiseButton')
   );
 
 updateLocalDenoiseStrengthLabel();
+let localDenoiseBeforeImage = null;
+let localDenoiseAfterImage = null;
+
+function showLocalDenoiseComparison(type) {
+  const image =
+    type === 'before'
+      ? localDenoiseBeforeImage
+      : localDenoiseAfterImage;
+
+  const area =
+    $('localDenoiseCompareArea');
+
+  if (!area) {
+    return;
+  }
+
+  if (!image) {
+    area.innerHTML =
+      '<div class="empty">比較画像がまだないよ</div>';
+
+    return;
+  }
+
+  area.innerHTML = `
+    <img
+      src="${image}"
+      alt="Denoise comparison"
+      style="
+        width:100%;
+        max-width:100%;
+        border-radius:12px;
+      "
+    >
+  `;
+}
+
+$('localDenoiseBeforeButton')
+  ?.addEventListener(
+    'click',
+    () => {
+      showLocalDenoiseComparison(
+        'before'
+      );
+    }
+  );
+
+$('localDenoiseAfterButton')
+  ?.addEventListener(
+    'click',
+    () => {
+      showLocalDenoiseComparison(
+        'after'
+      );
+    }
+  );
 /* ---------------- Local Super Resolution ---------------- */
 
 function updateSuperResolutionStrengthLabel() {
