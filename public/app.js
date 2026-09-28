@@ -915,6 +915,542 @@ $('multiPhotoAiEditButton')?.addEventListener(
     });
   }
 );
+/* ---------------- Local Super Resolution ---------------- */
+
+function updateSuperResolutionStrengthLabel() {
+  const value = Math.max(
+    0,
+    Math.min(
+      100,
+      Number(
+        $('superResolutionStrength')?.value || 50
+      )
+    )
+  );
+
+  if ($('superResolutionStrengthValue')) {
+    $('superResolutionStrengthValue').textContent =
+      String(value);
+  }
+}
+
+function waitForSuperResolutionFrame() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      resolve();
+    });
+  });
+}
+
+function superResolutionCanvasToBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(
+            new Error(
+              '高画質画像を作成できなかったよ'
+            )
+          );
+          return;
+        }
+
+        resolve(blob);
+      },
+      'image/png'
+    );
+  });
+}
+
+function clampSuperResolutionValue(value) {
+  return Math.max(
+    0,
+    Math.min(
+      255,
+      Math.round(value)
+    )
+  );
+}
+
+function enhanceSuperResolutionTile(
+  imageData,
+  strength
+) {
+  const width =
+    imageData.width;
+
+  const height =
+    imageData.height;
+
+  const pixels =
+    imageData.data;
+
+  const source =
+    new Uint8ClampedArray(
+      pixels
+    );
+
+  const amount =
+    0.15 +
+    (
+      Math.max(
+        0,
+        Math.min(
+          100,
+          Number(strength)
+        )
+      ) /
+      100
+    ) * 0.85;
+
+  const threshold =
+    6 -
+    (
+      Math.max(
+        0,
+        Math.min(
+          100,
+          Number(strength)
+        )
+      ) /
+      100
+    ) * 3;
+
+  for (
+    let y = 1;
+    y < height - 1;
+    y++
+  ) {
+    for (
+      let x = 1;
+      x < width - 1;
+      x++
+    ) {
+      const index =
+        (
+          y * width +
+          x
+        ) * 4;
+
+      const left =
+        index - 4;
+
+      const right =
+        index + 4;
+
+      const top =
+        index -
+        width * 4;
+
+      const bottom =
+        index +
+        width * 4;
+
+      for (
+        let channel = 0;
+        channel < 3;
+        channel++
+      ) {
+        const center =
+          source[
+            index + channel
+          ];
+
+        const blur =
+          (
+            center * 4 +
+            source[
+              left + channel
+            ] +
+            source[
+              right + channel
+            ] +
+            source[
+              top + channel
+            ] +
+            source[
+              bottom + channel
+            ]
+          ) / 8;
+
+        let detail =
+          center - blur;
+
+        if (
+          Math.abs(detail) <
+          threshold
+        ) {
+          detail *= 0.25;
+        }
+
+        pixels[
+          index + channel
+        ] =
+          clampSuperResolutionValue(
+            center +
+            detail * amount
+          );
+      }
+    }
+  }
+
+  return imageData;
+}
+async function buildLocalSuperResolutionBlob() {
+  if (!loaded) {
+    throw new Error(
+      '先に画像を読み込んでね'
+    );
+  }
+
+  const sourceW =
+    sourceImage.naturalWidth;
+
+  const sourceH =
+    sourceImage.naturalHeight;
+
+  if (
+    !sourceW ||
+    !sourceH
+  ) {
+    throw new Error(
+      '元画像のサイズを取得できなかったよ'
+    );
+  }
+
+  if (
+    sourceW > 7680 ||
+    sourceH > 7680 ||
+    sourceW * sourceH > 40000000
+  ) {
+    throw new Error(
+      '画像が大きすぎるよ。先に少しリサイズしてね'
+    );
+  }
+
+  const strength =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        Number(
+          $('superResolutionStrength')
+            ?.value || 50
+        )
+      )
+    );
+
+  const normalizedRotation =
+    (
+      (rotateExtra % 360) +
+      360
+    ) % 360;
+
+  const rotated90 =
+    normalizedRotation === 90 ||
+    normalizedRotation === 270;
+
+  const workCanvas =
+    document.createElement(
+      'canvas'
+    );
+
+  workCanvas.width =
+    rotated90
+      ? sourceH
+      : sourceW;
+
+  workCanvas.height =
+    rotated90
+      ? sourceW
+      : sourceH;
+
+  const workCtx =
+    workCanvas.getContext(
+      '2d',
+      {
+        willReadFrequently: true
+      }
+    );
+
+  if (!workCtx) {
+    throw new Error(
+      '超解像処理を開始できなかったよ'
+    );
+  }
+
+  const natural =
+    Number(
+      controls.natural.value
+    ) / 100;
+
+  const brightness =
+    Number(
+      controls.brightness.value
+    ) *
+      (1 - natural) +
+    100 * natural;
+
+  const contrast =
+    Number(
+      controls.contrast.value
+    ) *
+      (1 - natural) +
+    94 * natural;
+
+  const saturation =
+    Number(
+      controls.saturation.value
+    ) *
+      (1 - natural) +
+    90 * natural;
+
+  workCtx.save();
+
+  workCtx.filter =
+    `brightness(${brightness}%) ` +
+    `contrast(${contrast}%) ` +
+    `saturate(${saturation}%)`;
+
+  workCtx.translate(
+    workCanvas.width / 2,
+    workCanvas.height / 2
+  );
+
+  workCtx.rotate(
+    (
+      Number(
+        controls.rotate.value
+      ) +
+      rotateExtra
+    ) *
+      Math.PI /
+      180
+  );
+
+  if (flip) {
+    workCtx.scale(
+      -1,
+      1
+    );
+  }
+
+  workCtx.drawImage(
+    sourceImage,
+    -sourceW / 2,
+    -sourceH / 2,
+    sourceW,
+    sourceH
+  );
+
+  workCtx.restore();
+
+  const tileSize = 512;
+  const overlap = 1;
+
+  const tilesX =
+    Math.ceil(
+      workCanvas.width /
+      tileSize
+    );
+
+  const tilesY =
+    Math.ceil(
+      workCanvas.height /
+      tileSize
+    );
+
+  const totalTiles =
+    tilesX * tilesY;
+
+  let completedTiles = 0;
+
+  for (
+    let y = 0;
+    y < workCanvas.height;
+    y += tileSize
+  ) {
+    for (
+      let x = 0;
+      x < workCanvas.width;
+      x += tileSize
+    ) {
+      const coreWidth =
+        Math.min(
+          tileSize,
+          workCanvas.width - x
+        );
+
+      const coreHeight =
+        Math.min(
+          tileSize,
+          workCanvas.height - y
+        );
+
+      const readX =
+        Math.max(
+          0,
+          x - overlap
+        );
+
+      const readY =
+        Math.max(
+          0,
+          y - overlap
+        );
+
+      const readRight =
+        Math.min(
+          workCanvas.width,
+          x +
+            coreWidth +
+            overlap
+        );
+
+      const readBottom =
+        Math.min(
+          workCanvas.height,
+          y +
+            coreHeight +
+            overlap
+        );
+
+      const tileData =
+        workCtx.getImageData(
+          readX,
+          readY,
+          readRight - readX,
+          readBottom - readY
+        );
+
+      enhanceSuperResolutionTile(
+        tileData,
+        strength
+      );
+
+      workCtx.putImageData(
+        tileData,
+        readX,
+        readY,
+        x - readX,
+        y - readY,
+        coreWidth,
+        coreHeight
+      );
+
+      completedTiles++;
+
+      if (
+        completedTiles % 2 === 0 ||
+        completedTiles === totalTiles
+      ) {
+        const progress =
+          Math.round(
+            completedTiles /
+              totalTiles *
+              100
+          );
+
+        if (
+          $('superResolutionStatus')
+        ) {
+          $('superResolutionStatus')
+            .textContent =
+              `🔍 高精細化中… ${progress}%`;
+        }
+
+        await waitForSuperResolutionFrame();
+      }
+    }
+  }
+
+  return await superResolutionCanvasToBlob(
+    workCanvas
+  );
+}
+$('superResolutionStrength')?.addEventListener(
+  'input',
+  updateSuperResolutionStrengthLabel
+);
+
+$('superResolutionButton')?.addEventListener(
+  'click',
+  async () => {
+    if (!loaded) {
+      if ($('superResolutionStatus')) {
+        $('superResolutionStatus').textContent =
+          '先に画像を読み込んでね';
+      }
+
+      return;
+    }
+
+    const button =
+      $('superResolutionButton');
+
+    if (!button) {
+      return;
+    }
+
+    button.disabled = true;
+
+    if ($('superResolutionStatus')) {
+      $('superResolutionStatus').textContent =
+        '🔍 ローカル高精細化を開始しています…';
+    }
+
+    let objectUrl = null;
+
+    try {
+      const resultBlob =
+        await buildLocalSuperResolutionBlob();
+
+      objectUrl =
+        URL.createObjectURL(
+          resultBlob
+        );
+
+      if ($('superResolutionStatus')) {
+        $('superResolutionStatus').textContent =
+          '✨ 仕上げ中…';
+      }
+
+      await loadImageData(
+        objectUrl
+      );
+
+      if ($('superResolutionStatus')) {
+        $('superResolutionStatus').textContent =
+          '✅ ローカル高精細化が完了しました';
+      }
+
+    } catch (error) {
+      console.error(
+        'Local super resolution failed:',
+        error
+      );
+
+      if ($('superResolutionStatus')) {
+        $('superResolutionStatus').textContent =
+          `⚠️ ${
+            error?.message ||
+            '高精細化に失敗しました'
+          }`;
+      }
+
+    } finally {
+      button.disabled = false;
+
+      if (objectUrl) {
+        URL.revokeObjectURL(
+          objectUrl
+        );
+      }
+    }
+  }
+);
+
+updateSuperResolutionStrengthLabel();
 /* ---------------- Local Resize Studio ---------------- */
 
 let resizeAspectRatio = 1;
