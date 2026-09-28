@@ -139,6 +139,128 @@
 </section>
 
   <div class="canvas-wrap"><canvas id="canvas"></canvas></div>
+  <section class="card" id="resizeStudio">
+  <h3>📐 画像サイズ変更</h3>
+
+  <p class="note">
+    幅・高さ・画質を自由に決めてリサイズできます。
+    リサイズ後はNaturalFixでそのまま補正できます。
+  </p>
+
+  <div class="grid2">
+    <div>
+      <label class="row-label">
+        <span>プリセット</span>
+      </label>
+
+      <select id="resizePreset">
+        <option value="custom" selected>カスタム</option>
+        <option value="1280x720">1280 × 720</option>
+        <option value="1920x1080">1920 × 1080</option>
+        <option value="1080x1920">1080 × 1920</option>
+        <option value="1080x1080">1080 × 1080</option>
+        <option value="2048x2048">2048 × 2048</option>
+        <option value="3840x2160">3840 × 2160（4K）</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="row-label">
+        <span>保存形式</span>
+      </label>
+
+      <select id="resizeFormat">
+        <option value="jpeg" selected>JPEG</option>
+        <option value="png">PNG</option>
+        <option value="webp">WebP</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div>
+      <label class="row-label">
+        <span>幅 px</span>
+      </label>
+
+      <input
+        id="resizeWidth"
+        type="number"
+        min="1"
+        max="7680"
+        step="1"
+        placeholder="1920"
+      >
+    </div>
+
+    <div>
+      <label class="row-label">
+        <span>高さ px</span>
+      </label>
+
+      <input
+        id="resizeHeight"
+        type="number"
+        min="1"
+        max="7680"
+        step="1"
+        placeholder="1080"
+      >
+    </div>
+  </div>
+
+  <div class="checks">
+    <label class="check">
+      <input
+        id="resizeLockAspect"
+        type="checkbox"
+        checked
+      >
+      🔒 縦横比を固定
+    </label>
+  </div>
+
+  <div class="control">
+    <label>
+      <span>保存画質</span>
+      <span id="resizeQualityValue">95</span>
+    </label>
+
+    <input
+      id="resizeQuality"
+      type="range"
+      min="50"
+      max="100"
+      step="1"
+      value="95"
+    >
+  </div>
+
+  <div class="buttons">
+    <button
+      id="applyResizeButton"
+      class="primary"
+      type="button"
+    >
+      📐 リサイズして編集
+    </button>
+
+    <button
+      id="saveResizedButton"
+      class="green"
+      type="button"
+    >
+      💾 指定サイズで保存
+    </button>
+  </div>
+
+  <div
+    id="resizeStatus"
+    class="status"
+  >
+    画像を読み込んでね
+  </div>
+  </section>
 
   <section class="card">
     <h3>✨ NaturalFix補正</h3>
