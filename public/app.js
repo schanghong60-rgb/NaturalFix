@@ -1063,39 +1063,146 @@ function buildResizedDataURL() {
     height
   } = getResizeTargetSize();
 
-  const guideIds = [
-    'showGuide',
-    'showDistortion',
-    'showPoseGuide',
-    'showHandGuide'
-  ];
+  const mimeType =
+    getResizeMimeType();
 
-  const guideStates =
-    guideIds.map(
-      (id) => ({
-        id,
-        checked:
-          !!$(id)?.checked
-      })
-    );
+  const quality =
+    getResizeQuality();
 
-  for (
-    const item of guideStates
+  const sourceW =
+    sourceImage.naturalWidth;
+
+  const sourceH =
+    sourceImage.naturalHeight;
+
+  if (
+    !sourceW ||
+    !sourceH
   ) {
-    if ($(item.id)) {
-      $(item.id).checked = false;
-    }
+    throw new Error(
+      '元画像のサイズを取得できなかったよ'
+    );
   }
 
-  drawImage(true);
+  const totalRotation =
+    Number(
+      controls.rotate.value
+    ) +
+    rotateExtra;
+
+  const normalizedRotation =
+    (
+      (rotateExtra % 360) +
+      360
+    ) % 360;
+
+  const rotated90 =
+    normalizedRotation === 90 ||
+    normalizedRotation === 270;
+
+  const renderCanvas =
+    document.createElement(
+      'canvas'
+    );
+
+  renderCanvas.width =
+    rotated90
+      ? sourceH
+      : sourceW;
+
+  renderCanvas.height =
+    rotated90
+      ? sourceW
+      : sourceH;
+
+  const renderCtx =
+    renderCanvas.getContext(
+      '2d'
+    );
+
+  if (!renderCtx) {
+    throw new Error(
+      '高画質書き出しを開始できなかったよ'
+    );
+  }
+
+  const natural =
+    Number(
+      controls.natural.value
+    ) / 100;
+
+  const brightness =
+    Number(
+      controls.brightness.value
+    ) *
+      (1 - natural) +
+    100 * natural;
+
+  const contrast =
+    Number(
+      controls.contrast.value
+    ) *
+      (1 - natural) +
+    94 * natural;
+
+  const saturation =
+    Number(
+      controls.saturation.value
+    ) *
+      (1 - natural) +
+    90 * natural;
+
+  renderCtx.save();
+
+  renderCtx.filter =
+    `brightness(${brightness}%) ` +
+    `contrast(${contrast}%) ` +
+    `saturate(${saturation}%)`;
+
+  renderCtx.translate(
+    renderCanvas.width / 2,
+    renderCanvas.height / 2
+  );
+
+  renderCtx.rotate(
+    totalRotation *
+      Math.PI /
+      180
+  );
+
+  if (flip) {
+    renderCtx.scale(
+      -1,
+      1
+    );
+  }
+
+  renderCtx.imageSmoothingEnabled =
+    true;
+
+  renderCtx.imageSmoothingQuality =
+    'high';
+
+  renderCtx.drawImage(
+    sourceImage,
+    -sourceW / 2,
+    -sourceH / 2,
+    sourceW,
+    sourceH
+  );
+
+  renderCtx.restore();
 
   const outputCanvas =
     document.createElement(
       'canvas'
     );
 
-  outputCanvas.width = width;
-  outputCanvas.height = height;
+  outputCanvas.width =
+    width;
+
+  outputCanvas.height =
+    height;
 
   const outputCtx =
     outputCanvas.getContext(
@@ -1104,7 +1211,22 @@ function buildResizedDataURL() {
 
   if (!outputCtx) {
     throw new Error(
-      'リサイズ処理を開始できなかったよ'
+      '出力Canvasを作れなかったよ'
+    );
+  }
+
+  if (
+    mimeType ===
+    'image/jpeg'
+  ) {
+    outputCtx.fillStyle =
+      '#ffffff';
+
+    outputCtx.fillRect(
+      0,
+      0,
+      width,
+      height
     );
   }
 
@@ -1115,30 +1237,16 @@ function buildResizedDataURL() {
     'high';
 
   outputCtx.drawImage(
-    canvas,
+    renderCanvas,
     0,
     0,
-    canvas.width,
-    canvas.height,
+    renderCanvas.width,
+    renderCanvas.height,
     0,
     0,
     width,
     height
   );
-
-  for (
-    const item of guideStates
-  ) {
-    if ($(item.id)) {
-      $(item.id).checked =
-        item.checked;
-    }
-  }
-
-  scheduleDraw();
-
-  const mimeType =
-    getResizeMimeType();
 
   if (
     mimeType ===
@@ -1151,9 +1259,10 @@ function buildResizedDataURL() {
 
   return outputCanvas.toDataURL(
     mimeType,
-    getResizeQuality()
+    quality
   );
 }
+    
 
 function loadImageDataExact(src) {
   return new Promise(
