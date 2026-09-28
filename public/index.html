@@ -261,7 +261,46 @@
     画像を読み込んでね
   </div>
   </section>
+<section class="card" id="superResolutionStudio">
+  <h3>🔍 ローカル超解像</h3>
 
+  <p class="note">
+    画像サイズはそのままで、輪郭や細部を端末内で高精細化します。
+    Herokuや外部AIは使いません。
+  </p>
+
+  <div class="control">
+    <label>
+      <span>超解像の強さ</span>
+      <span id="superResolutionStrengthValue">50</span>
+    </label>
+
+    <input
+      id="superResolutionStrength"
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      value="50"
+    >
+  </div>
+
+  <button
+    id="superResolutionButton"
+    class="primary"
+    type="button"
+    style="width:100%"
+  >
+    🔍 ローカル超解像
+  </button>
+
+  <div
+    id="superResolutionStatus"
+    class="status"
+  >
+    画像を読み込んでね
+  </div>
+</section>
   <section class="card">
     <h3>✨ NaturalFix補正</h3>
     <div class="control"><label><span>自然化</span><span id="naturalValue">0</span></label><input id="natural" type="range" min="0" max="100" value="0"></div>
