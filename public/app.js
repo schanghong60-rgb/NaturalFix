@@ -1038,7 +1038,11 @@ async function runLocalDenoise() {
       0,
       0
     );
-
+    localDenoiseBeforeImage =
+  workCanvas.toDataURL(
+    'image/png'
+  );
+  
     const imageData =
       workCtx.getImageData(
         0,
