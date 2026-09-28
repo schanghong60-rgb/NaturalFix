@@ -1,4 +1,4 @@
- const CACHE = 'naturalfix-v1.1.5-ai-edit';
+const CACHE = 'naturalfix-v1.1.6-local-super-resolution'; 
 const CORE = ['./styles.css', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
