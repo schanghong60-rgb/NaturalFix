@@ -215,6 +215,7 @@ function loadImageData(src) {
       currentLandmarks = null; faceAnalysis = null; currentPoseLandmarks = null; currentHands = []; selectedPartDataUrl = null; extractedParts.clear();
       resetControls(); syncCanvasDimensions(); drawImage(false);
       await analyzeFace(true).catch(() => {});
+      syncResizePanelFromCanvas();
       resolve();
     };
     sourceImage.onerror = reject;
@@ -914,6 +915,544 @@ $('multiPhotoAiEditButton')?.addEventListener(
     });
   }
 );
+/* ---------------- Local Resize Studio ---------------- */
+
+let resizeAspectRatio = 1;
+
+function updateResizeQualityLabel() {
+  const value = Number(
+    $('resizeQuality')?.value || 95
+  );
+
+  if ($('resizeQualityValue')) {
+    $('resizeQualityValue').textContent =
+      String(value);
+  }
+}
+
+function syncResizePanelFromCanvas() {
+  if (!loaded) return;
+
+  const width = canvas.width;
+  const height = canvas.height;
+
+  if (!width || !height) return;
+
+  resizeAspectRatio =
+    width / height;
+
+  if ($('resizeWidth')) {
+    $('resizeWidth').value =
+      String(width);
+  }
+
+  if ($('resizeHeight')) {
+    $('resizeHeight').value =
+      String(height);
+  }
+
+  if ($('resizePreset')) {
+    $('resizePreset').value =
+      'custom';
+  }
+
+  if ($('resizeStatus')) {
+    $('resizeStatus').textContent =
+      `現在: ${width} × ${height}px`;
+  }
+}
+
+function getResizeTargetSize() {
+  const width = Math.round(
+    Number(
+      $('resizeWidth')?.value || 0
+    )
+  );
+
+  const height = Math.round(
+    Number(
+      $('resizeHeight')?.value || 0
+    )
+  );
+
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width < 1 ||
+    height < 1
+  ) {
+    throw new Error(
+      '幅と高さを正しく入力してね'
+    );
+  }
+
+  if (
+    width > 7680 ||
+    height > 7680
+  ) {
+    throw new Error(
+      '最大サイズは7680pxまでだよ'
+    );
+  }
+
+  if (
+    width * height >
+    40000000
+  ) {
+    throw new Error(
+      '画像サイズが大きすぎるよ'
+    );
+  }
+
+  return {
+    width,
+    height
+  };
+}
+
+function getResizeMimeType() {
+  const format =
+    $('resizeFormat')?.value ||
+    'jpeg';
+
+  if (format === 'png') {
+    return 'image/png';
+  }
+
+  if (format === 'webp') {
+    return 'image/webp';
+  }
+
+  return 'image/jpeg';
+}
+
+function getResizeQuality() {
+  return Math.max(
+    0.5,
+    Math.min(
+      1,
+      Number(
+        $('resizeQuality')?.value ||
+        95
+      ) / 100
+    )
+  );
+}
+
+function getResizeExtension() {
+  const format =
+    $('resizeFormat')?.value ||
+    'jpeg';
+
+  if (format === 'jpeg') {
+    return 'jpg';
+  }
+
+  return format;
+}
+
+function buildResizedDataURL() {
+  if (!loaded) {
+    throw new Error(
+      '先に画像を読み込んでね'
+    );
+  }
+
+  const {
+    width,
+    height
+  } = getResizeTargetSize();
+
+  const guideIds = [
+    'showGuide',
+    'showDistortion',
+    'showPoseGuide',
+    'showHandGuide'
+  ];
+
+  const guideStates =
+    guideIds.map(
+      (id) => ({
+        id,
+        checked:
+          !!$(id)?.checked
+      })
+    );
+
+  for (
+    const item of guideStates
+  ) {
+    if ($(item.id)) {
+      $(item.id).checked = false;
+    }
+  }
+
+  drawImage(true);
+
+  const outputCanvas =
+    document.createElement(
+      'canvas'
+    );
+
+  outputCanvas.width = width;
+  outputCanvas.height = height;
+
+  const outputCtx =
+    outputCanvas.getContext(
+      '2d'
+    );
+
+  if (!outputCtx) {
+    throw new Error(
+      'リサイズ処理を開始できなかったよ'
+    );
+  }
+
+  outputCtx.imageSmoothingEnabled =
+    true;
+
+  outputCtx.imageSmoothingQuality =
+    'high';
+
+  outputCtx.drawImage(
+    canvas,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+    0,
+    0,
+    width,
+    height
+  );
+
+  for (
+    const item of guideStates
+  ) {
+    if ($(item.id)) {
+      $(item.id).checked =
+        item.checked;
+    }
+  }
+
+  scheduleDraw();
+
+  const mimeType =
+    getResizeMimeType();
+
+  if (
+    mimeType ===
+    'image/png'
+  ) {
+    return outputCanvas.toDataURL(
+      mimeType
+    );
+  }
+
+  return outputCanvas.toDataURL(
+    mimeType,
+    getResizeQuality()
+  );
+}
+
+function loadImageDataExact(src) {
+  return new Promise(
+    (resolve, reject) => {
+      sourceImage.onload =
+        async () => {
+          loaded = true;
+
+          baseW =
+            sourceImage.naturalWidth;
+
+          baseH =
+            sourceImage.naturalHeight;
+
+          currentLandmarks = null;
+          faceAnalysis = null;
+          currentPoseLandmarks = null;
+          currentHands = [];
+          selectedPartDataUrl = null;
+          extractedParts.clear();
+
+          resetControls();
+
+          syncCanvasDimensions();
+
+          drawImage(false);
+
+          await analyzeFace(true)
+            .catch(() => {});
+
+          syncResizePanelFromCanvas();
+
+          resolve();
+        };
+
+      sourceImage.onerror =
+        reject;
+
+      sourceImage.src = src;
+    }
+  );
+}
+
+async function applyResizeToEditor() {
+  if (!loaded) {
+    $('resizeStatus').textContent =
+      '⚠️ 先に画像を読み込んでね';
+
+    return;
+  }
+
+  const button =
+    $('applyResizeButton');
+
+  button.disabled = true;
+
+  try {
+    const {
+      width,
+      height
+    } = getResizeTargetSize();
+
+    $('resizeStatus').textContent =
+      `📐 ${width} × ${height}px にリサイズ中…`;
+
+    const dataUrl =
+      buildResizedDataURL();
+
+    await loadImageDataExact(
+      dataUrl
+    );
+
+    $('resizeStatus').textContent =
+      `✅ ${width} × ${height}px に変更したよ`;
+
+  } catch (error) {
+    console.error(error);
+
+    $('resizeStatus').textContent =
+      `⚠️ ${
+        error.message ||
+        'リサイズに失敗しました'
+      }`;
+
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function saveResizedImage() {
+  if (!loaded) {
+    $('resizeStatus').textContent =
+      '⚠️ 先に画像を読み込んでね';
+
+    return;
+  }
+
+  try {
+    const {
+      width,
+      height
+    } = getResizeTargetSize();
+
+    $('resizeStatus').textContent =
+      `💾 ${width} × ${height}px を作成中…`;
+
+    const dataUrl =
+      buildResizedDataURL();
+
+    const link =
+      document.createElement(
+        'a'
+      );
+
+    link.href = dataUrl;
+
+    link.download =
+      `NaturalFix_${width}x${height}_${Date.now()}.${getResizeExtension()}`;
+
+    link.click();
+
+    $('resizeStatus').textContent =
+      `✅ ${width} × ${height}px で保存したよ`;
+
+  } catch (error) {
+    console.error(error);
+
+    $('resizeStatus').textContent =
+      `⚠️ ${
+        error.message ||
+        '保存に失敗しました'
+      }`;
+  }
+}
+
+$('resizePreset')?.addEventListener(
+  'change',
+  (event) => {
+    const value =
+      event.target.value;
+
+    if (
+      value === 'custom'
+    ) {
+      return;
+    }
+
+    const parts =
+      value.split('x');
+
+    if (
+      parts.length !== 2
+    ) {
+      return;
+    }
+
+    const width =
+      Number(parts[0]);
+
+    const height =
+      Number(parts[1]);
+
+    if (
+      !width ||
+      !height
+    ) {
+      return;
+    }
+
+    $('resizeWidth').value =
+      String(width);
+
+    $('resizeHeight').value =
+      String(height);
+
+    resizeAspectRatio =
+      width / height;
+
+    $('resizeStatus').textContent =
+      `設定: ${width} × ${height}px`;
+  }
+);
+
+$('resizeWidth')?.addEventListener(
+  'input',
+  () => {
+    if ($('resizePreset')) {
+      $('resizePreset').value =
+        'custom';
+    }
+
+    const width =
+      Number(
+        $('resizeWidth').value
+      );
+
+    if (
+      !$('resizeLockAspect')
+        ?.checked ||
+      !width ||
+      !resizeAspectRatio
+    ) {
+      return;
+    }
+
+    $('resizeHeight').value =
+      String(
+        Math.max(
+          1,
+          Math.round(
+            width /
+            resizeAspectRatio
+          )
+        )
+      );
+  }
+);
+
+$('resizeHeight')?.addEventListener(
+  'input',
+  () => {
+    if ($('resizePreset')) {
+      $('resizePreset').value =
+        'custom';
+    }
+
+    const height =
+      Number(
+        $('resizeHeight').value
+      );
+
+    if (
+      !$('resizeLockAspect')
+        ?.checked ||
+      !height ||
+      !resizeAspectRatio
+    ) {
+      return;
+    }
+
+    $('resizeWidth').value =
+      String(
+        Math.max(
+          1,
+          Math.round(
+            height *
+            resizeAspectRatio
+          )
+        )
+      );
+  }
+);
+
+$('resizeLockAspect')?.addEventListener(
+  'change',
+  () => {
+    if (
+      !$('resizeLockAspect')
+        .checked
+    ) {
+      return;
+    }
+
+    const width =
+      Number(
+        $('resizeWidth')?.value
+      );
+
+    const height =
+      Number(
+        $('resizeHeight')?.value
+      );
+
+    if (
+      width > 0 &&
+      height > 0
+    ) {
+      resizeAspectRatio =
+        width / height;
+    }
+  }
+);
+
+$('resizeQuality')?.addEventListener(
+  'input',
+  updateResizeQualityLabel
+);
+
+$('applyResizeButton')?.addEventListener(
+  'click',
+  applyResizeToEditor
+);
+
+$('saveResizedButton')?.addEventListener(
+  'click',
+  saveResizedImage
+);
+
+updateResizeQualityLabel();
 
 
 Object.values(controls).forEach((el) => el.addEventListener('input', () => { updateLabels(); scheduleDraw(); }));
