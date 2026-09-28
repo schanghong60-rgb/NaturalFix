@@ -2288,91 +2288,603 @@ $('declutterUndoButton')?.addEventListener(
     showDeclutterComparison('before');
   }
 );
+function loadDeclutterLocalImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    image.onload = () => {
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      reject(
+        new Error(
+          'ローカル画像を読み込めなかったよ'
+        )
+      );
+    };
+
+    image.src = src;
+  });
+}
+
+async function localDeclutterInpaint(
+  baseImage,
+  maskImage,
+  strength = 60
+) {
+  if (!baseImage) {
+    throw new Error(
+      '元画像がありません'
+    );
+  }
+
+  if (!maskImage) {
+    throw new Error(
+      '消したい部分を指で塗ってね'
+    );
+  }
+
+  const [base, mask] =
+    await Promise.all([
+      loadDeclutterLocalImage(
+        baseImage
+      ),
+      loadDeclutterLocalImage(
+        maskImage
+      )
+    ]);
+
+  const workCanvas =
+    document.createElement(
+      'canvas'
+    );
+
+  workCanvas.width =
+    base.naturalWidth;
+
+  workCanvas.height =
+    base.naturalHeight;
+
+  const workCtx =
+    workCanvas.getContext(
+      '2d',
+      {
+        willReadFrequently: true
+      }
+    );
+
+  if (!workCtx) {
+    throw new Error(
+      'ローカル消去を開始できなかったよ'
+    );
+  }
+
+  workCtx.drawImage(
+    base,
+    0,
+    0,
+    workCanvas.width,
+    workCanvas.height
+  );
+
+  const imageData =
+    workCtx.getImageData(
+      0,
+      0,
+      workCanvas.width,
+      workCanvas.height
+    );
+
+  const maskCanvas =
+    document.createElement(
+      'canvas'
+    );
+
+  maskCanvas.width =
+    workCanvas.width;
+
+  maskCanvas.height =
+    workCanvas.height;
+
+  const maskCtx =
+    maskCanvas.getContext(
+      '2d',
+      {
+        willReadFrequently: true
+      }
+    );
+
+  if (!maskCtx) {
+    throw new Error(
+      'マスク処理を開始できなかったよ'
+    );
+  }
+
+  maskCtx.drawImage(
+    mask,
+    0,
+    0,
+    maskCanvas.width,
+    maskCanvas.height
+  );
+
+  const maskData =
+    maskCtx.getImageData(
+      0,
+      0,
+      maskCanvas.width,
+      maskCanvas.height
+    );
+
+  const width =
+    workCanvas.width;
+
+  const height =
+    workCanvas.height;
+
+  const total =
+    width * height;
+
+  const pixels =
+    imageData.data;
+
+  const masked =
+    new Uint8Array(total);
+
+  const filled =
+    new Uint8Array(total);
+
+  const queued =
+    new Uint8Array(total);
+
+  let maskedCount = 0;
+
+  for (
+    let index = 0;
+    index < total;
+    index++
+  ) {
+    const offset =
+      index * 4;
+
+    const isMasked =
+      maskData.data[offset] > 127;
+
+    if (isMasked) {
+      masked[index] = 1;
+      maskedCount++;
+    } else {
+      filled[index] = 1;
+    }
+  }
+
+  if (!maskedCount) {
+    throw new Error(
+      '消したい部分を先に塗ってね'
+    );
+  }
+
+  if (
+    maskedCount >
+    total * 0.8
+  ) {
+    throw new Error(
+      '塗った範囲が広すぎるよ'
+    );
+  }
+
+  const directions = [
+    [-1, -1],
+    [0, -1],
+    [1, -1],
+    [-1, 0],
+    [1, 0],
+    [-1, 1],
+    [0, 1],
+    [1, 1]
+  ];
+
+  function hasFilledNeighbor(
+    x,
+    y
+  ) {
+    for (
+      const [dx, dy]
+      of directions
+    ) {
+      const nx =
+        x + dx;
+
+      const ny =
+        y + dy;
+
+      if (
+        nx < 0 ||
+        ny < 0 ||
+        nx >= width ||
+        ny >= height
+      ) {
+        continue;
+      }
+
+      const index =
+        ny * width + nx;
+
+      if (filled[index]) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  const queue = [];
+
+  for (
+    let y = 0;
+    y < height;
+    y++
+  ) {
+    for (
+      let x = 0;
+      x < width;
+      x++
+    ) {
+      const index =
+        y * width + x;
+
+      if (
+        masked[index] &&
+        hasFilledNeighbor(
+          x,
+          y
+        )
+      ) {
+        queue.push(index);
+        queued[index] = 1;
+      }
+    }
+  }
+
+  let head = 0;
+    while (
+    head < queue.length
+  ) {
+    const index =
+      queue[head++];
+
+    if (filled[index]) {
+      continue;
+    }
+
+    const x =
+      index % width;
+
+    const y =
+      Math.floor(
+        index / width
+      );
+
+    let red = 0;
+    let green = 0;
+    let blue = 0;
+    let alpha = 0;
+    let count = 0;
+
+    for (
+      const [dx, dy]
+      of directions
+    ) {
+      const nx =
+        x + dx;
+
+      const ny =
+        y + dy;
+
+      if (
+        nx < 0 ||
+        ny < 0 ||
+        nx >= width ||
+        ny >= height
+      ) {
+        continue;
+      }
+
+      const neighborIndex =
+        ny * width + nx;
+
+      if (
+        !filled[
+          neighborIndex
+        ]
+      ) {
+        continue;
+      }
+
+      const offset =
+        neighborIndex * 4;
+
+      red +=
+        pixels[offset];
+
+      green +=
+        pixels[
+          offset + 1
+        ];
+
+      blue +=
+        pixels[
+          offset + 2
+        ];
+
+      alpha +=
+        pixels[
+          offset + 3
+        ];
+
+      count++;
+    }
+
+    if (!count) {
+      continue;
+    }
+
+    const offset =
+      index * 4;
+
+    pixels[offset] =
+      Math.round(
+        red / count
+      );
+
+    pixels[offset + 1] =
+      Math.round(
+        green / count
+      );
+
+    pixels[offset + 2] =
+      Math.round(
+        blue / count
+      );
+
+    pixels[offset + 3] =
+      Math.round(
+        alpha / count
+      );
+
+    filled[index] = 1;
+
+    for (
+      const [dx, dy]
+      of directions
+    ) {
+      const nx =
+        x + dx;
+
+      const ny =
+        y + dy;
+
+      if (
+        nx < 0 ||
+        ny < 0 ||
+        nx >= width ||
+        ny >= height
+      ) {
+        continue;
+      }
+
+      const neighborIndex =
+        ny * width + nx;
+
+      if (
+        masked[
+          neighborIndex
+        ] &&
+        !filled[
+          neighborIndex
+        ] &&
+        !queued[
+          neighborIndex
+        ]
+      ) {
+        queue.push(
+          neighborIndex
+        );
+
+        queued[
+          neighborIndex
+        ] = 1;
+      }
+    }
+  }
+
+  const smoothPasses =
+    Math.max(
+      1,
+      Math.min(
+        4,
+        Math.round(
+          Number(strength) /
+          20
+        )
+      )
+    );
+
+  for (
+    let pass = 0;
+    pass < smoothPasses;
+    pass++
+  ) {
+    const source =
+      new Uint8ClampedArray(
+        pixels
+      );
+
+    for (
+      let y = 1;
+      y < height - 1;
+      y++
+    ) {
+      for (
+        let x = 1;
+        x < width - 1;
+        x++
+      ) {
+        const index =
+          y * width + x;
+
+        if (
+          !masked[index]
+        ) {
+          continue;
+        }
+
+        let red = 0;
+        let green = 0;
+        let blue = 0;
+        let count = 0;
+
+        for (
+          const [dx, dy]
+          of directions
+        ) {
+          const neighborIndex =
+            (
+              y + dy
+            ) *
+              width +
+            (
+              x + dx
+            );
+
+          const offset =
+            neighborIndex * 4;
+
+          red +=
+            source[offset];
+
+          green +=
+            source[
+              offset + 1
+            ];
+
+          blue +=
+            source[
+              offset + 2
+            ];
+
+          count++;
+        }
+
+        if (!count) {
+          continue;
+        }
+
+        const offset =
+          index * 4;
+
+        pixels[offset] =
+          Math.round(
+            red / count
+          );
+
+        pixels[offset + 1] =
+          Math.round(
+            green / count
+          );
+
+        pixels[offset + 2] =
+          Math.round(
+            blue / count
+          );
+      }
+    }
+  }
+
+  workCtx.putImageData(
+    imageData,
+    0,
+    0
+  );
+
+  return workCanvas.toDataURL(
+    'image/png'
+  );
+}
 
 $('runDeclutterButton')?.addEventListener(
   'click',
   async () => {
     if (!loaded) {
-      alert('先に画像を読み込んでね');
+      alert(
+        '先に画像を読み込んでね'
+      );
       return;
     }
 
-    const button = $('runDeclutterButton');
-    const mode = $('declutterMode').value;
+    const button =
+      $('runDeclutterButton');
+
+    const mode =
+      $('declutterMode').value;
 
     button.disabled = true;
 
     $('declutterStatus').textContent =
       mode === 'manual'
-        ? '🖌 指定部分をAIで自然に消去中…'
-        : '🧹 AIが不要物を探して整理中…';
+        ? '🖌 指定部分を端末内で自然に消去中…'
+        : '⚠️ 自動検出はまだ準備中です';
 
     try {
+      if (
+        mode !== 'manual'
+      ) {
+        throw new Error(
+          'ローカル版は今は手動モードを使ってね'
+        );
+      }
+
       const baseImage =
         await exportDeclutterBaseImage();
 
       const mask =
-        mode === 'manual'
-          ? getDeclutterMaskDataURL()
-          : null;
+        getDeclutterMaskDataURL();
 
-      if (mode === 'manual' && !mask) {
+      if (!mask) {
         throw new Error(
           '消したい部分を先に塗ってね'
         );
       }
 
-      declutterBeforeImage = baseImage;
-      declutterUndoImage = baseImage;
+      declutterBeforeImage =
+        baseImage;
 
-      const payload = {
-        mode,
-        baseImage,
-        mask,
-        prompt:
-          $('declutterPrompt')?.value.trim() || '',
-        strength:
+      declutterUndoImage =
+        baseImage;
+
+      const localImage =
+        await localDeclutterInpaint(
+          baseImage,
+          mask,
           Number(
-            $('declutterStrength')?.value || 60
-          ),
-        quality:
-          $('declutterQuality')?.value ||
-          'balanced',
-        protectPerson:
-          !!$('declutterProtectPerson')?.checked,
-        keepBackground:
-          !!$('declutterKeepBackground')?.checked,
-        seed:
-          Number($('seed')?.value || 42)
-      };
-
-      const r = await apiFetch(
-        '/api/declutter',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        }
-      );
-
-      const result = await r.json();
-
-      if (!r.ok) {
-        throw new Error(
-          result.error ||
-          'デクラッター処理に失敗しました'
+            $('declutterStrength')
+              ?.value || 60
+          )
         );
-      }
+
+      const result = {
+        image: localImage
+      };
 
       if (!result.image) {
         throw new Error(
-          'AIから画像を受け取れなかったよ'
+          '画像を作成できなかったよ'
         );
       }
 
-      declutterAfterImage = result.image;
+      declutterAfterImage =
+        result.image;
 
       $('declutterResultArea').innerHTML = `
         <img
@@ -2389,18 +2901,22 @@ $('runDeclutterButton')?.addEventListener(
       $('declutterResultImage').src =
         result.image;
 
-      await loadImageData(result.image);
+      await loadImageData(
+        result.image
+      );
 
       clearDeclutterMask();
 
       setDeclutterMaskVisible(
-        mode === 'manual'
+        true
       );
 
-      showDeclutterComparison('after');
+      showDeclutterComparison(
+        'after'
+      );
 
       $('declutterStatus').textContent =
-        '✅ AIデクラッター完了';
+        '✅ ローカルデクラッター完了';
 
     } catch (e) {
       console.error(e);
@@ -2413,6 +2929,7 @@ $('runDeclutterButton')?.addEventListener(
     }
   }
 );
+
 /* ---------------- Face analysis ---------------- */
 async function initFaceModel() {
   try {
