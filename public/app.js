@@ -1302,6 +1302,17 @@ function showLocalDenoiseComparison(type) {
       "
     >
   `;
+  $('localDenoiseBeforeButton')
+  ?.classList.toggle(
+    'green',
+    type === 'before'
+  );
+
+$('localDenoiseAfterButton')
+  ?.classList.toggle(
+    'green',
+    type === 'after'
+  );
 }
 
 $('localDenoiseBeforeButton')
