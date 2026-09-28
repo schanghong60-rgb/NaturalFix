@@ -1,4 +1,4 @@
-const CACHE = 'naturalfix-v1.1.8-compare-refresh';
+const CACHE = 'naturalfix-v1.1.9-local-denoise';
 const CORE = ['./styles.css', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
