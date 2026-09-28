@@ -1933,6 +1933,208 @@ function saveResizedImage() {
       }`;
   }
 }
+/* ---------------- Local 4K Export ---------------- */
+
+function updateLocal4KQualityLabel() {
+  const value =
+    Number(
+      $('local4kQuality')?.value || 98
+    );
+
+  if ($('local4kQualityValue')) {
+    $('local4kQualityValue').textContent =
+      String(value);
+  }
+}
+
+function exportLocal4KImage() {
+  if (!loaded) {
+    if ($('local4kStatus')) {
+      $('local4kStatus').textContent =
+        '⚠️ 先に画像を読み込んでね';
+    }
+
+    return;
+  }
+
+  const button =
+    $('local4kExportButton');
+
+  if (!button) {
+    return;
+  }
+
+  button.disabled = true;
+
+  const resizeWidth =
+    $('resizeWidth');
+
+  const resizeHeight =
+    $('resizeHeight');
+
+  const resizeFormat =
+    $('resizeFormat');
+
+  const resizeQuality =
+    $('resizeQuality');
+
+  if (
+    !resizeWidth ||
+    !resizeHeight ||
+    !resizeFormat ||
+    !resizeQuality
+  ) {
+    button.disabled = false;
+
+    if ($('local4kStatus')) {
+      $('local4kStatus').textContent =
+        '⚠️ 4K保存の準備に失敗しました';
+    }
+
+    return;
+  }
+
+  const oldWidth =
+    resizeWidth.value;
+
+  const oldHeight =
+    resizeHeight.value;
+
+  const oldFormat =
+    resizeFormat.value;
+
+  const oldQuality =
+    resizeQuality.value;
+
+  try {
+    const currentWidth =
+      Math.max(1, canvas.width);
+
+    const currentHeight =
+      Math.max(1, canvas.height);
+
+    let width;
+    let height;
+
+    if (currentWidth >= currentHeight) {
+      width = 3840;
+
+      height =
+        Math.max(
+          1,
+          Math.round(
+            3840 *
+            currentHeight /
+            currentWidth
+          )
+        );
+    } else {
+      height = 3840;
+
+      width =
+        Math.max(
+          1,
+          Math.round(
+            3840 *
+            currentWidth /
+            currentHeight
+          )
+        );
+    }
+
+    const format =
+      $('local4kFormat')?.value ||
+      'jpeg';
+
+    const quality =
+      Number(
+        $('local4kQuality')?.value ||
+        98
+      );
+
+    resizeWidth.value =
+      String(width);
+
+    resizeHeight.value =
+      String(height);
+
+    resizeFormat.value =
+      format;
+
+    resizeQuality.value =
+      String(quality);
+
+    if ($('local4kStatus')) {
+      $('local4kStatus').textContent =
+        `🖼️ ${width} × ${height}px を作成中…`;
+    }
+
+    const dataUrl =
+      buildResizedDataURL();
+
+    const link =
+      document.createElement('a');
+
+    const extension =
+      format === 'jpeg'
+        ? 'jpg'
+        : format;
+
+    link.href =
+      dataUrl;
+
+    link.download =
+      `NaturalFix_4K_${width}x${height}_${Date.now()}.${extension}`;
+
+    link.click();
+
+    if ($('local4kStatus')) {
+      $('local4kStatus').textContent =
+        `✅ ${width} × ${height}px で保存しました`;
+    }
+
+  } catch (error) {
+    console.error(
+      'Local 4K export failed:',
+      error
+    );
+
+    if ($('local4kStatus')) {
+      $('local4kStatus').textContent =
+        `⚠️ ${
+          error?.message ||
+          '4K保存に失敗しました'
+        }`;
+    }
+
+  } finally {
+    resizeWidth.value =
+      oldWidth;
+
+    resizeHeight.value =
+      oldHeight;
+
+    resizeFormat.value =
+      oldFormat;
+
+    resizeQuality.value =
+      oldQuality;
+
+    button.disabled = false;
+  }
+}
+
+$('local4kQuality')?.addEventListener(
+  'input',
+  updateLocal4KQualityLabel
+);
+
+$('local4kExportButton')?.addEventListener(
+  'click',
+  exportLocal4KImage
+);
+
+updateLocal4KQualityLabel();
 
 $('resizePreset')?.addEventListener(
   'change',
