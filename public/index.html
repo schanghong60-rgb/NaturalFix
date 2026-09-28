@@ -301,6 +301,46 @@
     画像を読み込んでね
   </div>
 </section>
+  <section class="card" id="localDenoiseStudio">
+  <h3>🧼 ローカルノイズ除去</h3>
+
+  <p class="note">
+    写真のザラつきや細かなノイズを端末内で自然に軽減します。
+    Herokuや外部AIは使いません。
+  </p>
+
+  <div class="control">
+    <label>
+      <span>ノイズ除去の強さ</span>
+      <span id="localDenoiseStrengthValue">40</span>
+    </label>
+
+    <input
+      id="localDenoiseStrength"
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      value="40"
+    >
+  </div>
+
+  <button
+    id="localDenoiseButton"
+    class="primary"
+    type="button"
+    style="width:100%"
+  >
+    🧼 ローカルノイズ除去
+  </button>
+
+  <div
+    id="localDenoiseStatus"
+    class="status"
+  >
+    画像を読み込んでね
+  </div>
+</section>
   <section class="card" id="local4kStudio">
   <h3>🖼️ ローカル4K高画質書き出し</h3>
 
