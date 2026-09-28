@@ -1570,10 +1570,268 @@ $('flipButton').addEventListener('click', () => { if (!loaded) return; flip = !f
 $('rotate90Button').addEventListener('click', () => { if (!loaded) return; rotateExtra = (rotateExtra + 90) % 360; syncCanvasDimensions(); scheduleDraw(); });
 $('resetButton').addEventListener('click', () => { if (!loaded) return; resetControls(); syncCanvasDimensions(); scheduleDraw(); });
 $('autoFixButton').addEventListener('click', () => {
-  if (!loaded) return; controls.natural.value = 55; controls.brightness.value = 102; controls.contrast.value = 96; controls.saturation.value = 92; controls.sharp.value = 8;
-  if (faceAnalysis && $('autoFaceTilt').checked) controls.rotate.value = Math.max(-20, Math.min(20, -faceAnalysis.tilt)).toFixed(1);
-  updateLabels(); scheduleDraw();
+  if (!loaded) return;
+
+  try {
+    const analysisCanvas =
+      document.createElement('canvas');
+
+    const maxAnalysisSize = 320;
+
+    const ratio = Math.min(
+      1,
+      maxAnalysisSize /
+        Math.max(
+          sourceImage.naturalWidth,
+          sourceImage.naturalHeight
+        )
+    );
+
+    analysisCanvas.width =
+      Math.max(
+        1,
+        Math.round(
+          sourceImage.naturalWidth *
+          ratio
+        )
+      );
+
+    analysisCanvas.height =
+      Math.max(
+        1,
+        Math.round(
+          sourceImage.naturalHeight *
+          ratio
+        )
+      );
+
+    const analysisCtx =
+      analysisCanvas.getContext(
+        '2d',
+        {
+          willReadFrequently: true
+        }
+      );
+
+    if (!analysisCtx) {
+      throw new Error(
+        '画像解析を開始できませんでした'
+      );
+    }
+
+    analysisCtx.drawImage(
+      sourceImage,
+      0,
+      0,
+      analysisCanvas.width,
+      analysisCanvas.height
+    );
+
+    const imageData =
+      analysisCtx.getImageData(
+        0,
+        0,
+        analysisCanvas.width,
+        analysisCanvas.height
+      );
+
+    const data = imageData.data;
+
+    let pixelCount = 0;
+    let luminanceSum = 0;
+    let luminanceSqSum = 0;
+    let saturationSum = 0;
+
+    for (
+      let i = 0;
+      i < data.length;
+      i += 4
+    ) {
+      const alpha =
+        data[i + 3];
+
+      if (alpha < 16) {
+        continue;
+      }
+
+      const r =
+        data[i] / 255;
+
+      const g =
+        data[i + 1] / 255;
+
+      const b =
+        data[i + 2] / 255;
+
+      const luminance =
+        (
+          0.2126 * r +
+          0.7152 * g +
+          0.0722 * b
+        ) * 255;
+
+      const maxChannel =
+        Math.max(r, g, b);
+
+      const minChannel =
+        Math.min(r, g, b);
+
+      const saturation =
+        maxChannel === 0
+          ? 0
+          : (
+              maxChannel -
+              minChannel
+            ) /
+            maxChannel;
+
+      luminanceSum +=
+        luminance;
+
+      luminanceSqSum +=
+        luminance *
+        luminance;
+
+      saturationSum +=
+        saturation;
+
+      pixelCount++;
+    }
+
+    if (!pixelCount) {
+      throw new Error(
+        '画像を解析できませんでした'
+      );
+    }
+
+    const averageLuminance =
+      luminanceSum /
+      pixelCount;
+
+    const variance =
+      Math.max(
+        0,
+        luminanceSqSum /
+          pixelCount -
+          averageLuminance *
+          averageLuminance
+      );
+
+    const luminanceDeviation =
+      Math.sqrt(
+        variance
+      );
+
+    const averageSaturation =
+      saturationSum /
+      pixelCount;
+
+    const clamp = (
+      value,
+      min,
+      max
+    ) =>
+      Math.max(
+        min,
+        Math.min(
+          max,
+          value
+        )
+      );
+
+    const brightness =
+      clamp(
+        100 *
+          Math.pow(
+            128 /
+              Math.max(
+                35,
+                averageLuminance
+              ),
+            0.42
+          ),
+        88,
+        122
+      );
+
+    const contrast =
+      clamp(
+        100 *
+          Math.pow(
+            55 /
+              Math.max(
+                22,
+                luminanceDeviation
+              ),
+            0.28
+          ),
+        88,
+        118
+      );
+
+    const saturation =
+      clamp(
+        100 *
+          Math.pow(
+            0.30 /
+              Math.max(
+                0.08,
+                averageSaturation
+              ),
+            0.25
+          ),
+        88,
+        120
+      );
+
+    controls.natural.value =
+      0;
+
+    controls.brightness.value =
+      Math.round(
+        brightness
+      );
+
+    controls.contrast.value =
+      Math.round(
+        contrast
+      );
+
+    controls.saturation.value =
+      Math.round(
+        saturation
+      );
+
+    controls.sharp.value =
+      luminanceDeviation < 45
+        ? 7
+        : 4;
+
+    if (
+      faceAnalysis &&
+      $('autoFaceTilt')?.checked
+    ) {
+      controls.rotate.value =
+        Math.max(
+          -20,
+          Math.min(
+            20,
+            -faceAnalysis.tilt
+          )
+        ).toFixed(1);
+    }
+
+    updateLabels();
+    scheduleDraw();
+
+  } catch (error) {
+    console.error(
+      'Local auto correction failed:',
+      error
+    );
+  }
 });
+
 $('downloadButton').addEventListener('click', async () => {
   const data = await exportCurrentDataURL(0.95); if (!data) return;
   const a = document.createElement('a'); a.href = data; a.download = `NaturalFix_${Date.now()}.jpg`; a.click();
