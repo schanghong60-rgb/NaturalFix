@@ -1,4 +1,4 @@
-const CACHE = 'naturalfix-v1.1.11-denoise-compare-fix';
+const CACHE = 'naturalfix-v1.1.12-denoise-button-fix';
 const CORE = ['./styles.css', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
