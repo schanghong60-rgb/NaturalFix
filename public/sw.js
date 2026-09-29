@@ -1,4 +1,4 @@
-const CACHE = 'naturalfix-v1.1.12-denoise-button-fix';
+const CACHE = 'naturalfix-v1.1.13-network-first-assets';
 const CORE = ['./styles.css', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -28,7 +28,13 @@ self.addEventListener('fetch', (event) => {
   // Runtime config and the feature pack should refresh from the server first.
   if (
     url.origin === self.location.origin &&
-    (url.pathname.endsWith('/config.js') || url.pathname.endsWith('/features.js'))
+    (
+  url.pathname.endsWith('/config.js') ||
+  url.pathname.endsWith('/features.js') ||
+  url.pathname.endsWith('/app.js') ||
+  url.pathname.endsWith('/styles.css')
+)
+    
   ) {
     event.respondWith(
       fetch(request, { cache: 'no-store' }).catch(() =>
