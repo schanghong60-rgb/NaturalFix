@@ -337,6 +337,35 @@
     };
     img.src = src;
   }
+   window.naturalFixSetComparison = (
+  before,
+  after
+) => {
+  if (before) {
+    originalDataUrl = before;
+
+    const img = new Image();
+
+    img.onload = () => {
+      originalImage = img;
+    };
+
+    img.src = before;
+
+    if ($('nfCompareBefore')) {
+      $('nfCompareBefore').src =
+        before;
+    }
+  }
+
+  if (
+    after &&
+    $('nfCompareAfter')
+  ) {
+    $('nfCompareAfter').src =
+      after;
+  }
+};
 
   $('fileInput')?.addEventListener('change', (e) => {
     captureOriginalFromFile(e.target.files?.[0]);
