@@ -301,6 +301,47 @@
     画像を読み込んでね
   </div>
 </section>
+  <section class="card" id="localDeblurStudio">
+  <h3>🪄 ローカルぼかし軽減</h3>
+
+  <p class="note">
+    軽いぼやけ・甘いピント・わずかな手ブレ感を、
+    端末内だけで見やすく補正します。<br>
+    Herokuや外部AIは使いません。
+  </p>
+
+  <div class="control">
+    <label>
+      <span>ぼかし軽減の強さ</span>
+      <span id="localDeblurStrengthValue">45</span>
+    </label>
+
+    <input
+      id="localDeblurStrength"
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      value="45"
+    >
+  </div>
+
+  <button
+    id="localDeblurButton"
+    class="primary"
+    type="button"
+    style="width:100%"
+  >
+    🪄 ローカルぼかし軽減
+  </button>
+
+  <div
+    id="localDeblurStatus"
+    class="status"
+  >
+    画像を読み込んでね
+  </div>
+</section>
   <section class="card" id="localDenoiseStudio">
   <h3>🧼 ローカルノイズ除去</h3>
 
