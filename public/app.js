@@ -2073,6 +2073,17 @@ async function runLocalCleanup() {
   );
 
   try {
+    const cleanupBeforeDataUrl = (() => {
+  localCleanupCtx.putImageData(
+    localCleanupSourceImage,
+    0,
+    0
+  );
+
+  return localCleanupCanvas.toDataURL(
+    'image/png'
+  );
+})();
     const maskImage =
       localCleanupMaskCtx.getImageData(
         bounds.x,
@@ -2469,6 +2480,10 @@ async function runLocalCleanup() {
       0,
       0
     );
+    const cleanupAfterDataUrl =
+  localCleanupCanvas.toDataURL(
+    'image/png'
+  );
     const cleanedBlob =
   await new Promise((resolve, reject) => {
     localCleanupCanvas.toBlob(
@@ -2497,6 +2512,15 @@ try {
 } finally {
   URL.revokeObjectURL(
     cleanedUrl
+  );
+}
+    if (
+  typeof window.naturalFixSetComparison ===
+  'function'
+) {
+  window.naturalFixSetComparison(
+    cleanupBeforeDataUrl,
+    cleanupAfterDataUrl
   );
 }
 
