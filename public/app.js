@@ -1527,6 +1527,275 @@ $('localCleanupStrength')
     'input',
     updateLocalCleanupLabels
   );
+let localCleanupActiveStroke = null;
+
+function getLocalCleanupPointerPoint(event) {
+  if (!localCleanupCanvas) {
+    return null;
+  }
+
+  const rect =
+    localCleanupCanvas.getBoundingClientRect();
+
+  if (
+    !rect.width ||
+    !rect.height
+  ) {
+    return null;
+  }
+
+  return {
+    x:
+      (event.clientX - rect.left) *
+      (localCleanupCanvas.width / rect.width),
+
+    y:
+      (event.clientY - rect.top) *
+      (localCleanupCanvas.height / rect.height)
+  };
+}
+
+function getLocalCleanupBrushPixels() {
+  if (!localCleanupCanvas) {
+    return 24;
+  }
+
+  const rect =
+    localCleanupCanvas.getBoundingClientRect();
+
+  const scale =
+    rect.width
+      ? localCleanupCanvas.width / rect.width
+      : 1;
+
+  return Math.max(
+    1,
+    Number(
+      $('localCleanupBrushSize')?.value || 24
+    ) * scale
+  );
+}
+
+function renderLocalCleanupMaskPreview() {
+  if (
+    !localCleanupCanvas ||
+    !localCleanupCtx ||
+    !localCleanupSourceImage
+  ) {
+    return;
+  }
+
+  localCleanupCtx.putImageData(
+    localCleanupSourceImage,
+    0,
+    0
+  );
+
+  localCleanupCtx.save();
+
+  localCleanupCtx.globalAlpha =
+    0.45;
+
+  localCleanupCtx.drawImage(
+    localCleanupMaskCanvas,
+    0,
+    0
+  );
+
+  localCleanupCtx.restore();
+}
+
+function drawLocalCleanupMaskSegment(
+  from,
+  to,
+  brush
+) {
+  if (!localCleanupMaskCtx) {
+    return;
+  }
+
+  localCleanupMaskCtx.save();
+
+  localCleanupMaskCtx.strokeStyle =
+    'rgb(255, 64, 64)';
+
+  localCleanupMaskCtx.fillStyle =
+    'rgb(255, 64, 64)';
+
+  localCleanupMaskCtx.lineWidth =
+    brush;
+
+  localCleanupMaskCtx.lineCap =
+    'round';
+
+  localCleanupMaskCtx.lineJoin =
+    'round';
+
+  const samePoint =
+    from.x === to.x &&
+    from.y === to.y;
+
+  if (samePoint) {
+    localCleanupMaskCtx.beginPath();
+
+    localCleanupMaskCtx.arc(
+      from.x,
+      from.y,
+      brush / 2,
+      0,
+      Math.PI * 2
+    );
+
+    localCleanupMaskCtx.fill();
+  } else {
+    localCleanupMaskCtx.beginPath();
+
+    localCleanupMaskCtx.moveTo(
+      from.x,
+      from.y
+    );
+
+    localCleanupMaskCtx.lineTo(
+      to.x,
+      to.y
+    );
+
+    localCleanupMaskCtx.stroke();
+  }
+
+  localCleanupMaskCtx.restore();
+
+  renderLocalCleanupMaskPreview();
+}
+
+localCleanupCanvas
+  ?.addEventListener(
+    'pointerdown',
+    (event) => {
+      if (!localCleanupSourceImage) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const point =
+        getLocalCleanupPointerPoint(
+          event
+        );
+
+      if (!point) {
+        return;
+      }
+
+      const brush =
+        getLocalCleanupBrushPixels();
+
+      localCleanupDrawing = true;
+
+      localCleanupLastPoint =
+        point;
+
+      localCleanupActiveStroke = {
+        brush,
+        points: [point]
+      };
+
+      try {
+        localCleanupCanvas.setPointerCapture(
+          event.pointerId
+        );
+      } catch {}
+
+      drawLocalCleanupMaskSegment(
+        point,
+        point,
+        brush
+      );
+
+      if ($('localCleanupStatus')) {
+        $('localCleanupStatus').textContent =
+          '🔴 赤くなぞった場所を消します';
+      }
+    }
+  );
+
+localCleanupCanvas
+  ?.addEventListener(
+    'pointermove',
+    (event) => {
+      if (
+        !localCleanupDrawing ||
+        !localCleanupLastPoint ||
+        !localCleanupActiveStroke
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const point =
+        getLocalCleanupPointerPoint(
+          event
+        );
+
+      if (!point) {
+        return;
+      }
+
+      drawLocalCleanupMaskSegment(
+        localCleanupLastPoint,
+        point,
+        localCleanupActiveStroke.brush
+      );
+
+      localCleanupActiveStroke.points.push(
+        point
+      );
+
+      localCleanupLastPoint =
+        point;
+    }
+  );
+
+function finishLocalCleanupStroke(event) {
+  if (!localCleanupDrawing) {
+    return;
+  }
+
+  if (localCleanupActiveStroke) {
+    localCleanupHistory.push(
+      localCleanupActiveStroke
+    );
+  }
+
+  localCleanupDrawing = false;
+  localCleanupLastPoint = null;
+  localCleanupActiveStroke = null;
+
+  try {
+    if (
+      localCleanupCanvas?.hasPointerCapture(
+        event.pointerId
+      )
+    ) {
+      localCleanupCanvas.releasePointerCapture(
+        event.pointerId
+      );
+    }
+  } catch {}
+}
+
+localCleanupCanvas
+  ?.addEventListener(
+    'pointerup',
+    finishLocalCleanupStroke
+  );
+
+localCleanupCanvas
+  ?.addEventListener(
+    'pointercancel',
+    finishLocalCleanupStroke
+  );
 /* ---------------- Local Super Resolution ---------------- */
 
 function updateSuperResolutionStrengthLabel() {
