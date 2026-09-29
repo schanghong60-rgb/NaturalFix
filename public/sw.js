@@ -1,4 +1,4 @@
-const CACHE = 'naturalfix-v1.1.17-local-deblur';
+const CACHE = 'naturalfix-v1.1.18-local-deblock';
 const CORE = ['./styles.css', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
