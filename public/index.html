@@ -368,6 +368,109 @@
   ノイズ除去すると比較できます
 </div>
 </section>
+  <section class="card" id="localCleanupStudio">
+  <h3>🩹 ローカル消しゴム</h3>
+
+  <p class="note">
+    白い光・細い線・小物などを指でなぞって、
+    周囲の色になじませて自然に消します。<br>
+    Herokuや外部AIは使わず、端末内で処理します。
+  </p>
+
+  <input
+    id="localCleanupFile"
+    type="file"
+    accept="image/*"
+    hidden
+  >
+
+  <div class="buttons">
+    <button
+      id="localCleanupPickButton"
+      type="button"
+    >
+      🖼 画像を読み込む
+    </button>
+
+    <button
+      id="localCleanupUndoButton"
+      type="button"
+    >
+      ↩ 1つ戻す
+    </button>
+  </div>
+
+  <div class="control">
+    <label>
+      <span>ブラシサイズ</span>
+      <span id="localCleanupBrushSizeValue">24</span>
+    </label>
+
+    <input
+      id="localCleanupBrushSize"
+      type="range"
+      min="6"
+      max="80"
+      step="1"
+      value="24"
+    >
+  </div>
+
+  <div class="control">
+    <label>
+      <span>補完の強さ</span>
+      <span id="localCleanupStrengthValue">18</span>
+    </label>
+
+    <input
+      id="localCleanupStrength"
+      type="range"
+      min="4"
+      max="40"
+      step="1"
+      value="18"
+    >
+  </div>
+
+  <button
+    id="localCleanupClearMaskButton"
+    type="button"
+    style="width:100%"
+  >
+    🧹 なぞりをクリア
+  </button>
+
+  <button
+    id="localCleanupRunButton"
+    class="primary"
+    type="button"
+    style="width:100%"
+  >
+    ✨ ローカル消しゴム実行
+  </button>
+
+  <div
+    id="localCleanupStatus"
+    class="status"
+  >
+    画像を読み込んで、消したい場所をなぞってね
+  </div>
+
+  <div
+    id="localCleanupCanvasWrap"
+    class="generated"
+  >
+    <canvas
+      id="localCleanupCanvas"
+      style="
+        display:none;
+        width:100%;
+        border-radius:12px;
+        touch-action:none;
+      "
+    ></canvas>
+  </div>
+  </section>
   <section class="card" id="local4kStudio">
   <h3>🖼️ ローカル4K高画質書き出し</h3>
 
