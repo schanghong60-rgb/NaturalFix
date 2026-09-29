@@ -1380,6 +1380,153 @@ function updateLocalCleanupLabels() {
 }
 
 updateLocalCleanupLabels();
+function loadLocalCleanupImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url =
+      URL.createObjectURL(file);
+
+    const image =
+      new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+
+      reject(
+        new Error(
+          '画像を読み込めませんでした'
+        )
+      );
+    };
+
+    image.src = url;
+  });
+}
+
+async function handleLocalCleanupFile(file) {
+  const status =
+    $('localCleanupStatus');
+
+  if (
+    !file ||
+    !localCleanupCanvas ||
+    !localCleanupCtx ||
+    !localCleanupMaskCtx
+  ) {
+    return;
+  }
+
+  try {
+    if (status) {
+      status.textContent =
+        '画像を読み込んでいます…';
+    }
+
+    const image =
+      await loadLocalCleanupImageFile(
+        file
+      );
+
+    localCleanupCanvas.width =
+      image.naturalWidth;
+
+    localCleanupCanvas.height =
+      image.naturalHeight;
+
+    localCleanupMaskCanvas.width =
+      image.naturalWidth;
+
+    localCleanupMaskCanvas.height =
+      image.naturalHeight;
+
+    localCleanupCtx.clearRect(
+      0,
+      0,
+      localCleanupCanvas.width,
+      localCleanupCanvas.height
+    );
+
+    localCleanupCtx.drawImage(
+      image,
+      0,
+      0
+    );
+
+    localCleanupMaskCtx.clearRect(
+      0,
+      0,
+      localCleanupMaskCanvas.width,
+      localCleanupMaskCanvas.height
+    );
+
+    localCleanupSourceImage =
+      localCleanupCtx.getImageData(
+        0,
+        0,
+        localCleanupCanvas.width,
+        localCleanupCanvas.height
+      );
+
+    localCleanupHistory = [];
+
+    localCleanupCanvas.style.display =
+      'block';
+
+    if (status) {
+      status.textContent =
+        '✅ 読み込み完了。消したい場所を指でなぞってね';
+    }
+  } catch (error) {
+    console.error(error);
+
+    if (status) {
+      status.textContent =
+        `⚠️ ${
+          error.message ||
+          '画像の読み込みに失敗しました'
+        }`;
+    }
+  }
+}
+
+$('localCleanupPickButton')
+  ?.addEventListener(
+    'click',
+    () => {
+      $('localCleanupFile')?.click();
+    }
+  );
+
+$('localCleanupFile')
+  ?.addEventListener(
+    'change',
+    async (event) => {
+      const file =
+        event.target.files?.[0];
+
+      await handleLocalCleanupFile(
+        file
+      );
+
+      event.target.value = '';
+    }
+  );
+
+$('localCleanupBrushSize')
+  ?.addEventListener(
+    'input',
+    updateLocalCleanupLabels
+  );
+
+$('localCleanupStrength')
+  ?.addEventListener(
+    'input',
+    updateLocalCleanupLabels
+  );
 /* ---------------- Local Super Resolution ---------------- */
 
 function updateSuperResolutionStrengthLabel() {
