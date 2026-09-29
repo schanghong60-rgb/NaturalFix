@@ -3098,6 +3098,427 @@ $('superResolutionButton')?.addEventListener(
 );
 
 updateSuperResolutionStrengthLabel();
+/* ---------------- Local Deblur Studio ---------------- */
+
+function updateLocalDeblurStrengthLabel() {
+  const value = Math.max(
+    0,
+    Math.min(
+      100,
+      Number(
+        $('localDeblurStrength')?.value || 45
+      )
+    )
+  );
+
+  if ($('localDeblurStrengthValue')) {
+    $('localDeblurStrengthValue').textContent =
+      String(value);
+  }
+}
+
+function clampLocalDeblurValue(value) {
+  return Math.max(
+    0,
+    Math.min(
+      255,
+      Math.round(value)
+    )
+  );
+}
+
+function applyLocalDeblur(
+  imageData,
+  strength
+) {
+  const width = imageData.width;
+  const height = imageData.height;
+  const pixels = imageData.data;
+
+  if (
+    width < 3 ||
+    height < 3
+  ) {
+    return imageData;
+  }
+
+  const source =
+    new Uint8ClampedArray(
+      pixels
+    );
+
+  const blurred =
+    new Uint8ClampedArray(
+      source
+    );
+
+  const safeStrength =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        Number(strength)
+      )
+    );
+
+  const amount =
+  safeStrength / 100 * 1.5;
+
+  const threshold =
+    10 -
+    safeStrength / 100 * 6;
+
+  for (
+    let y = 1;
+    y < height - 1;
+    y++
+  ) {
+    for (
+      let x = 1;
+      x < width - 1;
+      x++
+    ) {
+      const index =
+        (y * width + x) * 4;
+
+      for (
+        let channel = 0;
+        channel < 3;
+        channel++
+      ) {
+        const topLeft =
+          index - width * 4 - 4 + channel;
+
+        const top =
+          index - width * 4 + channel;
+
+        const topRight =
+          index - width * 4 + 4 + channel;
+
+        const left =
+          index - 4 + channel;
+
+        const center =
+          index + channel;
+
+        const right =
+          index + 4 + channel;
+
+        const bottomLeft =
+          index + width * 4 - 4 + channel;
+
+        const bottom =
+          index + width * 4 + channel;
+
+        const bottomRight =
+          index + width * 4 + 4 + channel;
+
+        blurred[index + channel] =
+          Math.round(
+            (
+              source[topLeft] +
+              source[top] * 2 +
+              source[topRight] +
+              source[left] * 2 +
+              source[center] * 4 +
+              source[right] * 2 +
+              source[bottomLeft] +
+              source[bottom] * 2 +
+              source[bottomRight]
+            ) / 16
+          );
+      }
+    }
+  }
+
+  for (
+    let y = 1;
+    y < height - 1;
+    y++
+  ) {
+    for (
+      let x = 1;
+      x < width - 1;
+      x++
+    ) {
+      const index =
+        (y * width + x) * 4;
+
+      for (
+        let channel = 0;
+        channel < 3;
+        channel++
+      ) {
+        const original =
+          source[index + channel];
+
+        let detail =
+          original -
+          blurred[index + channel];
+
+        if (
+          Math.abs(detail) <
+          threshold
+        ) {
+          detail *= 0.25;
+        }
+
+        detail = Math.max(
+          -32,
+          Math.min(
+            32,
+            detail
+          )
+        );
+
+        pixels[index + channel] =
+          clampLocalDeblurValue(
+            original +
+            detail * amount
+          );
+      }
+    }
+  }
+
+  return imageData;
+}
+
+function localDeblurCanvasToBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(
+            new Error(
+              'ぼかし軽減画像を作成できませんでした'
+            )
+          );
+        }
+      },
+      'image/png'
+    );
+  });
+}
+
+async function buildLocalDeblurBlob() {
+  if (!loaded) {
+    throw new Error(
+      '先に画像を読み込んでね'
+    );
+  }
+
+  const workCanvas =
+    document.createElement(
+      'canvas'
+    );
+
+  workCanvas.width =
+    canvas.width;
+
+  workCanvas.height =
+    canvas.height;
+
+  const workCtx =
+    workCanvas.getContext(
+      '2d',
+      {
+        willReadFrequently: true
+      }
+    );
+
+  if (!workCtx) {
+    throw new Error(
+      'ぼかし軽減処理を開始できませんでした'
+    );
+  }
+
+  const natural =
+    Number(
+      controls.natural.value
+    ) / 100;
+
+  const brightness =
+    Number(
+      controls.brightness.value
+    ) *
+      (1 - natural) +
+    100 * natural;
+
+  const contrast =
+    Number(
+      controls.contrast.value
+    ) *
+      (1 - natural) +
+    94 * natural;
+
+  const saturation =
+    Number(
+      controls.saturation.value
+    ) *
+      (1 - natural) +
+    90 * natural;
+
+  workCtx.save();
+
+  workCtx.filter =
+    `brightness(${brightness}%) ` +
+    `contrast(${contrast}%) ` +
+    `saturate(${saturation}%)`;
+
+  workCtx.translate(
+    workCanvas.width / 2,
+    workCanvas.height / 2
+  );
+
+  workCtx.rotate(
+    (
+      Number(
+        controls.rotate.value
+      ) +
+      rotateExtra
+    ) *
+      Math.PI /
+      180
+  );
+
+  if (flip) {
+    workCtx.scale(
+      -1,
+      1
+    );
+  }
+
+  workCtx.drawImage(
+    sourceImage,
+    -baseW / 2,
+    -baseH / 2,
+    baseW,
+    baseH
+  );
+
+  workCtx.restore();
+
+  const strength =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        Number(
+          $('localDeblurStrength')?.value || 45
+        )
+      )
+    );
+
+  const imageData =
+    workCtx.getImageData(
+      0,
+      0,
+      workCanvas.width,
+      workCanvas.height
+    );
+
+  applyLocalDeblur(
+    imageData,
+    strength
+  );
+
+  workCtx.putImageData(
+    imageData,
+    0,
+    0
+  );
+
+  return await localDeblurCanvasToBlob(
+    workCanvas
+  );
+}
+
+$('localDeblurStrength')?.addEventListener(
+  'input',
+  updateLocalDeblurStrengthLabel
+);
+
+$('localDeblurButton')?.addEventListener(
+  'click',
+  async () => {
+    const status =
+      $('localDeblurStatus');
+
+    const button =
+      $('localDeblurButton');
+
+    if (!loaded) {
+      if (status) {
+        status.textContent =
+          '先に画像を読み込んでね';
+      }
+
+      return;
+    }
+
+    if (!button) {
+      return;
+    }
+
+    button.disabled = true;
+
+    if (status) {
+      status.textContent =
+        '🪄 ぼかしを軽減しています…';
+    }
+
+    let objectUrl = null;
+
+    await new Promise(
+      (resolve) =>
+        requestAnimationFrame(resolve)
+    );
+
+    try {
+      const resultBlob =
+        await buildLocalDeblurBlob();
+
+      objectUrl =
+        URL.createObjectURL(
+          resultBlob
+        );
+
+      await loadImageData(
+        objectUrl
+      );
+
+      if (status) {
+        status.textContent =
+          '✅ ローカルぼかし軽減が完了しました';
+      }
+    } catch (error) {
+      console.error(
+        'Local deblur failed:',
+        error
+      );
+
+      if (status) {
+        status.textContent =
+          `⚠️ ${
+            error?.message ||
+            'ぼかし軽減に失敗しました'
+          }`;
+      }
+    } finally {
+      button.disabled = false;
+
+      if (objectUrl) {
+        URL.revokeObjectURL(
+          objectUrl
+        );
+      }
+    }
+  }
+);
+
+updateLocalDeblurStrengthLabel();
 /* ---------------- Local Resize Studio ---------------- */
 
 let resizeAspectRatio = 1;
