@@ -2469,6 +2469,36 @@ async function runLocalCleanup() {
       0,
       0
     );
+    const cleanedBlob =
+  await new Promise((resolve, reject) => {
+    localCleanupCanvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+        } else {
+          reject(
+            new Error(
+              '処理後画像を作成できませんでした'
+            )
+          );
+        }
+      },
+      'image/png'
+    );
+  });
+
+const cleanedUrl =
+  URL.createObjectURL(cleanedBlob);
+
+try {
+  await loadImageData(
+    cleanedUrl
+  );
+} finally {
+  URL.revokeObjectURL(
+    cleanedUrl
+  );
+}
 
     localCleanupMaskCtx.clearRect(
       0,
