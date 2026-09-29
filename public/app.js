@@ -1334,6 +1334,52 @@ $('localDenoiseAfterButton')
       );
     }
   );
+/* ---------------- Local Cleanup Studio ---------------- */
+
+const localCleanupCanvas =
+  $('localCleanupCanvas');
+
+const localCleanupCtx =
+  localCleanupCanvas?.getContext(
+    '2d',
+    {
+      willReadFrequently: true
+    }
+  );
+
+const localCleanupMaskCanvas =
+  document.createElement('canvas');
+
+const localCleanupMaskCtx =
+  localCleanupMaskCanvas.getContext(
+    '2d',
+    {
+      willReadFrequently: true
+    }
+  );
+
+let localCleanupDrawing = false;
+let localCleanupLastPoint = null;
+let localCleanupSourceImage = null;
+let localCleanupHistory = [];
+
+function updateLocalCleanupLabels() {
+  if ($('localCleanupBrushSizeValue')) {
+    $('localCleanupBrushSizeValue').textContent =
+      String(
+        $('localCleanupBrushSize')?.value || 24
+      );
+  }
+
+  if ($('localCleanupStrengthValue')) {
+    $('localCleanupStrengthValue').textContent =
+      String(
+        $('localCleanupStrength')?.value || 18
+      );
+  }
+}
+
+updateLocalCleanupLabels();
 /* ---------------- Local Super Resolution ---------------- */
 
 function updateSuperResolutionStrengthLabel() {
