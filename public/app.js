@@ -1796,6 +1796,142 @@ localCleanupCanvas
     'pointercancel',
     finishLocalCleanupStroke
   );
+function redrawLocalCleanupMaskFromHistory() {
+  if (
+    !localCleanupMaskCtx ||
+    !localCleanupMaskCanvas
+  ) {
+    return;
+  }
+
+  localCleanupMaskCtx.clearRect(
+    0,
+    0,
+    localCleanupMaskCanvas.width,
+    localCleanupMaskCanvas.height
+  );
+
+  for (const stroke of localCleanupHistory) {
+    const points =
+      stroke.points || [];
+
+    if (!points.length) {
+      continue;
+    }
+
+    const brush =
+      stroke.brush || 24;
+
+    localCleanupMaskCtx.save();
+
+    localCleanupMaskCtx.strokeStyle =
+      'rgb(255, 64, 64)';
+
+    localCleanupMaskCtx.fillStyle =
+      'rgb(255, 64, 64)';
+
+    localCleanupMaskCtx.lineWidth =
+      brush;
+
+    localCleanupMaskCtx.lineCap =
+      'round';
+
+    localCleanupMaskCtx.lineJoin =
+      'round';
+
+    if (points.length === 1) {
+      localCleanupMaskCtx.beginPath();
+
+      localCleanupMaskCtx.arc(
+        points[0].x,
+        points[0].y,
+        brush / 2,
+        0,
+        Math.PI * 2
+      );
+
+      localCleanupMaskCtx.fill();
+    } else {
+      localCleanupMaskCtx.beginPath();
+
+      localCleanupMaskCtx.moveTo(
+        points[0].x,
+        points[0].y
+      );
+
+      for (
+        let i = 1;
+        i < points.length;
+        i += 1
+      ) {
+        localCleanupMaskCtx.lineTo(
+          points[i].x,
+          points[i].y
+        );
+      }
+
+      localCleanupMaskCtx.stroke();
+    }
+
+    localCleanupMaskCtx.restore();
+  }
+
+  renderLocalCleanupMaskPreview();
+}
+
+$('localCleanupUndoButton')
+  ?.addEventListener(
+    'click',
+    () => {
+      if (!localCleanupSourceImage) {
+        $('localCleanupStatus').textContent =
+          '先に画像を読み込んでね';
+        return;
+      }
+
+      if (!localCleanupHistory.length) {
+        $('localCleanupStatus').textContent =
+          '戻せるなぞりはありません';
+        return;
+      }
+
+      localCleanupHistory.pop();
+
+      redrawLocalCleanupMaskFromHistory();
+
+      $('localCleanupStatus').textContent =
+        '↩ 1つ前のなぞりに戻しました';
+    }
+  );
+
+$('localCleanupClearMaskButton')
+  ?.addEventListener(
+    'click',
+    () => {
+      if (!localCleanupSourceImage) {
+        $('localCleanupStatus').textContent =
+          '先に画像を読み込んでね';
+        return;
+      }
+
+      localCleanupDrawing = false;
+      localCleanupLastPoint = null;
+      localCleanupActiveStroke = null;
+      localCleanupHistory = [];
+
+      localCleanupMaskCtx.clearRect(
+        0,
+        0,
+        localCleanupMaskCanvas.width,
+        localCleanupMaskCanvas.height
+      );
+
+      renderLocalCleanupMaskPreview();
+
+      $('localCleanupStatus').textContent =
+  '🧹 なぞりを全部クリアしました';
+    }
+  );
 /* ---------------- Local Super Resolution ---------------- */
 
 function updateSuperResolutionStrengthLabel() {
