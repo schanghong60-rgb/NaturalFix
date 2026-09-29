@@ -1932,6 +1932,582 @@ $('localCleanupClearMaskButton')
   '🧹 なぞりを全部クリアしました';
     }
   );
+function getLocalCleanupWorkBounds() {
+  if (
+    !localCleanupCanvas ||
+    !localCleanupHistory.length
+  ) {
+    return null;
+  }
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const stroke of localCleanupHistory) {
+    const brush =
+      Math.max(
+        1,
+        Number(stroke.brush || 24)
+      );
+
+    const margin =
+      brush / 2 + 3;
+
+    for (const point of stroke.points || []) {
+      minX =
+        Math.min(
+          minX,
+          point.x - margin
+        );
+
+      minY =
+        Math.min(
+          minY,
+          point.y - margin
+        );
+
+      maxX =
+        Math.max(
+          maxX,
+          point.x + margin
+        );
+
+      maxY =
+        Math.max(
+          maxY,
+          point.y + margin
+        );
+    }
+  }
+
+  if (
+    !Number.isFinite(minX) ||
+    !Number.isFinite(minY) ||
+    !Number.isFinite(maxX) ||
+    !Number.isFinite(maxY)
+  ) {
+    return null;
+  }
+
+  const x =
+    Math.max(
+      0,
+      Math.floor(minX)
+    );
+
+  const y =
+    Math.max(
+      0,
+      Math.floor(minY)
+    );
+
+  const right =
+    Math.min(
+      localCleanupCanvas.width - 1,
+      Math.ceil(maxX)
+    );
+
+  const bottom =
+    Math.min(
+      localCleanupCanvas.height - 1,
+      Math.ceil(maxY)
+    );
+
+  return {
+    x,
+    y,
+    width:
+      right - x + 1,
+    height:
+      bottom - y + 1
+  };
+}
+
+async function runLocalCleanup() {
+  const status =
+    $('localCleanupStatus');
+
+  const button =
+    $('localCleanupRunButton');
+
+  if (
+    !localCleanupCanvas ||
+    !localCleanupCtx ||
+    !localCleanupMaskCtx ||
+    !localCleanupSourceImage
+  ) {
+    if (status) {
+      status.textContent =
+        '先に画像を読み込んでね';
+    }
+
+    return;
+  }
+
+  const bounds =
+    getLocalCleanupWorkBounds();
+
+  if (!bounds) {
+    if (status) {
+      status.textContent =
+        '消したい場所を赤くなぞってね';
+    }
+
+    return;
+  }
+
+  if (button) {
+    button.disabled = true;
+  }
+
+  if (status) {
+    status.textContent =
+      '✨ 周囲の色から自然に補完しています…';
+  }
+
+  await new Promise(
+    (resolve) =>
+      requestAnimationFrame(resolve)
+  );
+
+  try {
+    const maskImage =
+      localCleanupMaskCtx.getImageData(
+        bounds.x,
+        bounds.y,
+        bounds.width,
+        bounds.height
+      );
+
+    const total =
+      bounds.width *
+      bounds.height;
+
+    const masked =
+      new Uint8Array(total);
+
+    const known =
+      new Uint8Array(total);
+
+    let remaining = 0;
+
+    for (
+      let i = 0;
+      i < total;
+      i += 1
+    ) {
+      const alpha =
+        maskImage.data[
+          i * 4 + 3
+        ];
+
+      if (alpha > 0) {
+        masked[i] = 1;
+        remaining += 1;
+      } else {
+        known[i] = 1;
+      }
+    }
+
+    if (!remaining) {
+      if (status) {
+        status.textContent =
+          '消したい場所を赤くなぞってね';
+      }
+
+      return;
+    }
+
+    const output =
+      localCleanupCtx.createImageData(
+        bounds.width,
+        bounds.height
+      );
+
+    for (
+      let row = 0;
+      row < bounds.height;
+      row += 1
+    ) {
+      const sourceStart =
+        (
+          (bounds.y + row) *
+          localCleanupCanvas.width +
+          bounds.x
+        ) * 4;
+
+      const sourceEnd =
+        sourceStart +
+        bounds.width * 4;
+
+      output.data.set(
+        localCleanupSourceImage.data.subarray(
+          sourceStart,
+          sourceEnd
+        ),
+        row *
+          bounds.width *
+          4
+      );
+    }
+
+    let wave = 0;
+
+    while (remaining > 0) {
+      const newlyKnown = [];
+
+      for (
+        let y = 0;
+        y < bounds.height;
+        y += 1
+      ) {
+        for (
+          let x = 0;
+          x < bounds.width;
+          x += 1
+        ) {
+          const index =
+            y * bounds.width + x;
+
+          if (known[index]) {
+            continue;
+          }
+
+          let red = 0;
+          let green = 0;
+          let blue = 0;
+          let count = 0;
+
+          for (
+            let dy = -1;
+            dy <= 1;
+            dy += 1
+          ) {
+            for (
+              let dx = -1;
+              dx <= 1;
+              dx += 1
+            ) {
+              if (
+                dx === 0 &&
+                dy === 0
+              ) {
+                continue;
+              }
+
+              const nx =
+                x + dx;
+
+              const ny =
+                y + dy;
+
+              if (
+                nx < 0 ||
+                ny < 0 ||
+                nx >= bounds.width ||
+                ny >= bounds.height
+              ) {
+                continue;
+              }
+
+              const neighbour =
+                ny *
+                  bounds.width +
+                nx;
+
+              if (!known[neighbour]) {
+                continue;
+              }
+
+              const pixel =
+                neighbour * 4;
+
+              red +=
+                output.data[pixel];
+
+              green +=
+                output.data[
+                  pixel + 1
+                ];
+
+              blue +=
+                output.data[
+                  pixel + 2
+                ];
+
+              count += 1;
+            }
+          }
+
+          if (!count) {
+            continue;
+          }
+
+          const pixel =
+            index * 4;
+
+          output.data[pixel] =
+            Math.round(
+              red / count
+            );
+
+          output.data[
+            pixel + 1
+          ] =
+            Math.round(
+              green / count
+            );
+
+          output.data[
+            pixel + 2
+          ] =
+            Math.round(
+              blue / count
+            );
+
+          output.data[
+            pixel + 3
+          ] = 255;
+
+          newlyKnown.push(
+            index
+          );
+        }
+      }
+
+      if (!newlyKnown.length) {
+        throw new Error(
+          '補完できない範囲がありました'
+        );
+      }
+
+      for (
+        const index of newlyKnown
+      ) {
+        known[index] = 1;
+      }
+
+      remaining -=
+        newlyKnown.length;
+
+      wave += 1;
+
+      if (wave % 8 === 0) {
+        await new Promise(
+          (resolve) =>
+            requestAnimationFrame(
+              resolve
+            )
+        );
+      }
+    }
+
+    const strength =
+      Math.max(
+        4,
+        Math.min(
+          40,
+          Number(
+            $('localCleanupStrength')
+              ?.value || 18
+          )
+        )
+      );
+
+    const smoothPasses =
+      Math.max(
+        1,
+        Math.round(
+          strength / 10
+        )
+      );
+
+    for (
+      let pass = 0;
+      pass < smoothPasses;
+      pass += 1
+    ) {
+      const copy =
+        new Uint8ClampedArray(
+          output.data
+        );
+
+      for (
+        let y = 0;
+        y < bounds.height;
+        y += 1
+      ) {
+        for (
+          let x = 0;
+          x < bounds.width;
+          x += 1
+        ) {
+          const index =
+            y *
+              bounds.width +
+            x;
+
+          if (!masked[index]) {
+            continue;
+          }
+
+          let red = 0;
+          let green = 0;
+          let blue = 0;
+          let count = 0;
+
+          for (
+            let dy = -1;
+            dy <= 1;
+            dy += 1
+          ) {
+            for (
+              let dx = -1;
+              dx <= 1;
+              dx += 1
+            ) {
+              const nx =
+                x + dx;
+
+              const ny =
+                y + dy;
+
+              if (
+                nx < 0 ||
+                ny < 0 ||
+                nx >= bounds.width ||
+                ny >= bounds.height
+              ) {
+                continue;
+              }
+
+              const neighbourPixel =
+                (
+                  ny *
+                    bounds.width +
+                  nx
+                ) * 4;
+
+              red +=
+                copy[
+                  neighbourPixel
+                ];
+
+              green +=
+                copy[
+                  neighbourPixel + 1
+                ];
+
+              blue +=
+                copy[
+                  neighbourPixel + 2
+                ];
+
+              count += 1;
+            }
+          }
+
+          const pixel =
+            index * 4;
+
+          output.data[pixel] =
+            Math.round(
+              red / count
+            );
+
+          output.data[
+            pixel + 1
+          ] =
+            Math.round(
+              green / count
+            );
+
+          output.data[
+            pixel + 2
+          ] =
+            Math.round(
+              blue / count
+            );
+        }
+      }
+    }
+
+    for (
+      let row = 0;
+      row < bounds.height;
+      row += 1
+    ) {
+      const targetStart =
+        (
+          (bounds.y + row) *
+          localCleanupCanvas.width +
+          bounds.x
+        ) * 4;
+
+      const sourceStart =
+        row *
+        bounds.width *
+        4;
+
+      const sourceEnd =
+        sourceStart +
+        bounds.width * 4;
+
+      localCleanupSourceImage.data.set(
+        output.data.subarray(
+          sourceStart,
+          sourceEnd
+        ),
+        targetStart
+      );
+    }
+
+    localCleanupCtx.putImageData(
+      localCleanupSourceImage,
+      0,
+      0
+    );
+
+    localCleanupMaskCtx.clearRect(
+      0,
+      0,
+      localCleanupMaskCanvas.width,
+      localCleanupMaskCanvas.height
+    );
+
+    localCleanupDrawing = false;
+    localCleanupLastPoint = null;
+    localCleanupActiveStroke = null;
+    localCleanupHistory = [];
+
+    if (status) {
+      status.textContent =
+        '✅ ローカル消しゴムが完了しました';
+    }
+  } catch (error) {
+    console.error(error);
+
+    if (status) {
+      status.textContent =
+        `⚠️ ${
+          error.message ||
+          'ローカル消しゴムに失敗しました'
+        }`;
+    }
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
+$('localCleanupRunButton')
+  ?.addEventListener(
+    'click',
+    runLocalCleanup
+  );
 /* ---------------- Local Super Resolution ---------------- */
 
 function updateSuperResolutionStrengthLabel() {
