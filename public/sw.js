@@ -1,4 +1,4 @@
-const CACHE = 'naturalfix-v1.1.14-local-cleanup';
+const CACHE = 'naturalfix-v1.1.15-cleanup-current-image';
 const CORE = ['./styles.css', './app.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
