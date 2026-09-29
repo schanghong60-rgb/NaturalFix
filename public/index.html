@@ -342,6 +342,47 @@
     画像を読み込んでね
   </div>
 </section>
+  <section class="card" id="localDeblockStudio">
+  <h3>🧩 ローカル粗画質・ブロック軽減</h3>
+
+  <p class="note">
+    JPEG圧縮などで目立つ四角いブロック感や粗さを、
+    端末内で自然になめらかに整えます。<br>
+    Herokuや外部AIは使いません。
+  </p>
+
+  <div class="control">
+    <label>
+      <span>粗画質軽減の強さ</span>
+      <span id="localDeblockStrengthValue">40</span>
+    </label>
+
+    <input
+      id="localDeblockStrength"
+      type="range"
+      min="0"
+      max="100"
+      step="1"
+      value="40"
+    >
+  </div>
+
+  <button
+    id="localDeblockButton"
+    class="primary"
+    type="button"
+    style="width:100%"
+  >
+    🧩 ローカル粗画質・ブロック軽減
+  </button>
+
+  <div
+    id="localDeblockStatus"
+    class="status"
+  >
+    画像を読み込んでね
+  </div>
+</section>
   <section class="card" id="localDenoiseStudio">
   <h3>🧼 ローカルノイズ除去</h3>
 
