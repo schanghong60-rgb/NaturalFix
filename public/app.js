@@ -3519,6 +3519,477 @@ $('localDeblurButton')?.addEventListener(
 );
 
 updateLocalDeblurStrengthLabel();
+/* ---------------- Local Deblock Studio ---------------- */
+
+function updateLocalDeblockStrengthLabel() {
+  const value = Math.max(
+    0,
+    Math.min(
+      100,
+      Number(
+        $('localDeblockStrength')?.value || 40
+      )
+    )
+  );
+
+  if ($('localDeblockStrengthValue')) {
+    $('localDeblockStrengthValue').textContent =
+      String(value);
+  }
+}
+
+function clampLocalDeblockValue(value) {
+  return Math.max(
+    0,
+    Math.min(
+      255,
+      Math.round(value)
+    )
+  );
+}
+
+function applyLocalDeblock(
+  imageData,
+  strength
+) {
+  const width = imageData.width;
+  const height = imageData.height;
+  const pixels = imageData.data;
+
+  const safeStrength =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        Number(strength)
+      )
+    );
+
+  const amount =
+    safeStrength / 100 * 0.65;
+
+  if (
+    amount <= 0 ||
+    width < 10 ||
+    height < 10
+  ) {
+    return imageData;
+  }
+
+  const threshold =
+    12 +
+    safeStrength / 100 * 30;
+
+  let source =
+    new Uint8ClampedArray(
+      pixels
+    );
+
+  for (
+    let x = 8;
+    x < width - 1;
+    x += 8
+  ) {
+    for (
+      let y = 0;
+      y < height;
+      y++
+    ) {
+      const leftIndex =
+        (y * width + x - 1) * 4;
+
+      const rightIndex =
+        (y * width + x) * 4;
+
+      for (
+        let channel = 0;
+        channel < 3;
+        channel++
+      ) {
+        const leftOuter =
+          source[
+            leftIndex - 4 + channel
+          ];
+
+        const left =
+          source[
+            leftIndex + channel
+          ];
+
+        const right =
+          source[
+            rightIndex + channel
+          ];
+
+        const rightOuter =
+          source[
+            rightIndex + 4 + channel
+          ];
+
+        const difference =
+          Math.abs(
+            left - right
+          );
+
+        if (
+          difference <= threshold
+        ) {
+          const average =
+            (
+              leftOuter +
+              left +
+              right +
+              rightOuter
+            ) / 4;
+
+          pixels[
+            leftIndex + channel
+          ] =
+            clampLocalDeblockValue(
+              left * (1 - amount) +
+              average * amount
+            );
+
+          pixels[
+            rightIndex + channel
+          ] =
+            clampLocalDeblockValue(
+              right * (1 - amount) +
+              average * amount
+            );
+        }
+      }
+    }
+  }
+
+  source =
+    new Uint8ClampedArray(
+      pixels
+    );
+
+  for (
+    let y = 8;
+    y < height - 1;
+    y += 8
+  ) {
+    for (
+      let x = 0;
+      x < width;
+      x++
+    ) {
+      const topIndex =
+        ((y - 1) * width + x) * 4;
+
+      const bottomIndex =
+        (y * width + x) * 4;
+
+      for (
+        let channel = 0;
+        channel < 3;
+        channel++
+      ) {
+        const topOuter =
+          source[
+            topIndex -
+            width * 4 +
+            channel
+          ];
+
+        const top =
+          source[
+            topIndex + channel
+          ];
+
+        const bottom =
+          source[
+            bottomIndex + channel
+          ];
+
+        const bottomOuter =
+          source[
+            bottomIndex +
+            width * 4 +
+            channel
+          ];
+
+        const difference =
+          Math.abs(
+            top - bottom
+          );
+
+        if (
+          difference <= threshold
+        ) {
+          const average =
+            (
+              topOuter +
+              top +
+              bottom +
+              bottomOuter
+            ) / 4;
+
+          pixels[
+            topIndex + channel
+          ] =
+            clampLocalDeblockValue(
+              top * (1 - amount) +
+              average * amount
+            );
+
+          pixels[
+            bottomIndex + channel
+          ] =
+            clampLocalDeblockValue(
+              bottom * (1 - amount) +
+              average * amount
+            );
+        }
+      }
+    }
+  }
+
+  return imageData;
+}
+function localDeblockCanvasToBlob(
+  targetCanvas
+) {
+  return new Promise(
+    (resolve, reject) => {
+      targetCanvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(
+              new Error(
+                '粗画質軽減画像を作成できませんでした'
+              )
+            );
+          }
+        },
+        'image/png'
+      );
+    }
+  );
+}
+
+async function buildLocalDeblockBlob() {
+  if (!loaded) {
+    throw new Error(
+      '先に画像を読み込んでね'
+    );
+  }
+
+  const workCanvas =
+    document.createElement(
+      'canvas'
+    );
+
+  workCanvas.width =
+    canvas.width;
+
+  workCanvas.height =
+    canvas.height;
+
+  const workCtx =
+    workCanvas.getContext(
+      '2d',
+      {
+        willReadFrequently: true
+      }
+    );
+
+  if (!workCtx) {
+    throw new Error(
+      '粗画質軽減処理を開始できませんでした'
+    );
+  }
+
+  const natural =
+    Number(
+      controls.natural.value
+    ) / 100;
+
+  const brightness =
+    Number(
+      controls.brightness.value
+    ) *
+      (1 - natural) +
+    100 * natural;
+
+  const contrast =
+    Number(
+      controls.contrast.value
+    ) *
+      (1 - natural) +
+    94 * natural;
+
+  const saturation =
+    Number(
+      controls.saturation.value
+    ) *
+      (1 - natural) +
+    90 * natural;
+
+  workCtx.save();
+
+  workCtx.filter =
+    `brightness(${brightness}%) ` +
+    `contrast(${contrast}%) ` +
+    `saturate(${saturation}%)`;
+
+  workCtx.translate(
+    workCanvas.width / 2,
+    workCanvas.height / 2
+  );
+
+  workCtx.rotate(
+    (
+      Number(
+        controls.rotate.value
+      ) +
+      rotateExtra
+    ) *
+      Math.PI /
+      180
+  );
+
+  if (flip) {
+    workCtx.scale(
+      -1,
+      1
+    );
+  }
+
+  workCtx.drawImage(
+    sourceImage,
+    -baseW / 2,
+    -baseH / 2,
+    baseW,
+    baseH
+  );
+
+  workCtx.restore();
+
+  const strength =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        Number(
+          $('localDeblockStrength')?.value || 40
+        )
+      )
+    );
+
+  const imageData =
+    workCtx.getImageData(
+      0,
+      0,
+      workCanvas.width,
+      workCanvas.height
+    );
+
+  applyLocalDeblock(
+    imageData,
+    strength
+  );
+
+  workCtx.putImageData(
+    imageData,
+    0,
+    0
+  );
+
+  return await localDeblockCanvasToBlob(
+    workCanvas
+  );
+}
+
+$('localDeblockStrength')?.addEventListener(
+  'input',
+  updateLocalDeblockStrengthLabel
+);
+
+$('localDeblockButton')?.addEventListener(
+  'click',
+  async () => {
+    const status =
+      $('localDeblockStatus');
+
+    const button =
+      $('localDeblockButton');
+
+    if (!loaded) {
+      if (status) {
+        status.textContent =
+          '先に画像を読み込んでね';
+      }
+
+      return;
+    }
+
+    if (!button) {
+      return;
+    }
+
+    button.disabled = true;
+
+    if (status) {
+      status.textContent =
+        '🧩 粗画質・ブロック感を軽減しています…';
+    }
+
+    let objectUrl = null;
+
+    await new Promise(
+      (resolve) =>
+        requestAnimationFrame(resolve)
+    );
+
+    try {
+      const resultBlob =
+        await buildLocalDeblockBlob();
+
+      objectUrl =
+        URL.createObjectURL(
+          resultBlob
+        );
+
+      await loadImageData(
+        objectUrl
+      );
+
+      if (status) {
+        status.textContent =
+          '✅ 粗画質・ブロック軽減が完了しました';
+      }
+    } catch (error) {
+      console.error(
+        'Local deblock failed:',
+        error
+      );
+
+      if (status) {
+        status.textContent =
+          `⚠️ ${
+            error?.message ||
+            '粗画質軽減に失敗しました'
+          }`;
+      }
+    } finally {
+      button.disabled = false;
+
+      if (objectUrl) {
+        URL.revokeObjectURL(
+          objectUrl
+        );
+      }
+    }
+  }
+);
+
+updateLocalDeblockStrengthLabel();
 /* ---------------- Local Resize Studio ---------------- */
 
 let resizeAspectRatio = 1;
